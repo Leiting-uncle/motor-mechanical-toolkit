@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电机机械结构校核工具集</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================================================
+     顶部导航
+     ============================================================ -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <h1 id="header-title">⚙️ 渐开线花键参数计算工具</h1>
+      <span class="subtitle" id="header-subtitle">Involute Spline Parameter Calculator</span>
+    </div>
+    <span class="badge" id="header-badge">GB/T 3478.1-2008</span>
+  </div>
+  <!-- Tab 切换 -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-spline" onclick="switchTab('spline')">
+      <span class="tab-icon">⚙️</span> 渐开线花键
+    </button>
+    <button class="tab-btn" id="tab-keyway" onclick="switchTab('keyway')">
+      <span class="tab-icon">🔑</span> 平键校核
+    </button>
+    <button class="tab-btn" id="tab-stator" onclick="switchTab('stator')">
+      <span class="tab-icon">🏗️</span> 定子-机座过盈
+    </button>
+    <button class="tab-btn" id="tab-rotor" onclick="switchTab('rotor')">
+      <span class="tab-icon">🔄</span> 转子-转轴过盈
+    </button>
+    <button class="tab-btn" id="tab-bearing" onclick="switchTab('bearing')">
+      <span class="tab-icon">🔧</span> 轴承校核
+    </button>
+    <button class="tab-btn" id="tab-sleeve" onclick="switchTab('sleeve')">
+      <span class="tab-icon">🛡️</span> 屏蔽套失效
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     主布局
+     ============================================================ -->
+<div class="main-container">
+
+  <!-- ==========================================================
+       Tab 1: 渐开线花键
+       ========================================================== -->
+  <div class="tab-panel active" id="panel-spline">
+
+    <!-- ========== 花键左侧输入面板 ========== -->
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">📐</span> 输入参数
+        </div>
+        <div class="card-body">
+          <!-- 基本参数 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">模数 <em>m</em> <span class="unit">(mm)</span></label>
+              <select id="input-m" class="form-select">
+                <option value="">-- 选择模数 --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">齿数 <em>z</em></label>
+              <input type="number" id="input-z" class="form-input"
+                     placeholder="例: 25" min="6" max="120" value="25">
+            </div>
+          </div>
+
+          <!-- 公差与配合 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">公差等级</label>
+              <select id="input-grade" class="form-select">
+                <option value="4">4级 — 精密磨削</option>
+                <option value="5">5级 — 磨削/精拉</option>
+                <option value="6" selected>6级 — 拉削/滚齿</option>
+                <option value="7">7级 — 一般机加</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">配合类别</label>
+              <select id="input-fit" class="form-select">
+                <option value="H/h" selected>H/h — 滑动配合</option>
+                <option value="H/f">H/f — 紧滑动配合</option>
+                <option value="H/e">H/e — 转动配合</option>
+                <option value="H/d">H/d — 松转动配合</option>
+                <option value="H/k">H/k — 过渡配合</option>
+                <option value="H/js">H/js — 过渡(对称)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 齿根形式 -->
+          <div class="form-group">
+            <label class="form-label">齿根形式</label>
+            <select id="input-root" class="form-select">
+              <option value="flatRoot" selected>平齿根 (Flat Root)</option>
+              <option value="filletRoot">圆齿根 (Fillet Root)</option>
+            </select>
+          </div>
+
+          <!-- 量棒与配合长度 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">
+                量棒直径 <em>D<sub>R</sub></em> <span class="unit">(mm)</span>
+              </label>
+              <input type="number" id="input-pin" class="form-input"
+                     placeholder="0=自动推荐" min="0" step="0.1" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                配合长度 <em>L</em> <span class="unit">(mm)</span>
+              </label>
+              <input type="number" id="input-length" class="form-input"
+                     placeholder="0=自动(1×D)" min="0" step="0.5" value="0">
+            </div>
+          </div>
+
+          <!-- 强度校核参数（可选） -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              🛡️ 强度校核参数 <span style="font-weight:400;color:var(--text-light);font-size:0.75rem">— 可选，不填则跳过校核</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">花键材料</label>
+              <select id="input-material" class="form-select" onchange="toggleCustomMaterial('input-material','custom-spline')">
+                <option value="45钢调质">45钢 调质 (HB220-250)</option>
+                <option value="40Cr调质" selected>40Cr 调质 (HB250-280)</option>
+                <option value="42CrMo调质">42CrMo 调质 (HB260-300)</option>
+                <option value="20CrMnTi渗碳淬火">20CrMnTi 渗碳淬火 (HRC58-62)</option>
+                <option value="38CrMoAl氮化">38CrMoAl 氮化 (HV900-1100)</option>
+                <option value="custom">🖊️ 自定义材料...</option>
+              </select>
+              <!-- 自定义花键材料 -->
+              <div class="custom-material-panel" id="custom-spline">
+                <div class="custom-title">✏️ 自定义材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">[σ<sub>H</sub>] 许用挤压 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-compression" class="form-input" placeholder="140" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">[τ] 许用剪切 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-shear" class="form-input" placeholder="85" min="1" step="1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">[σ<sub>F</sub>] 许用弯曲 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-bending" class="form-input" placeholder="170" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">[p·v] 许用磨损 <span class="unit">(MPa·m/s)</span></label>
+                    <input type="number" id="cs-wearPV" class="form-input" placeholder="3.5" min="0.1" step="0.1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">[σ<sub>Hw</sub>] 无磨损 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-wearFree" class="form-input" placeholder="60" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">硬度/备注</label>
+                    <input type="text" id="cs-hardness" class="form-input" placeholder="自定义">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">
+                  传递转矩 <em>T</em> <span class="unit">(N·m)</span>
+                </label>
+                <input type="number" id="input-torque" class="form-input"
+                       placeholder="例: 500" min="0" step="1" value="500">
+              </div>
+              <div class="form-group">
+                <label class="form-label">
+                  轴上弯矩 <em>M</em> <span class="unit">(N·m)</span>
+                </label>
+                <input type="number" id="input-moment" class="form-input"
+                       placeholder="0=跳过弯曲校核" min="0" step="1" value="0">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">
+                  功率 <em>P</em> <span class="unit">(kW)</span>
+                </label>
+                <input type="number" id="input-power" class="form-input"
+                       placeholder="非必填" min="0" step="0.1" value="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">
+                  转速 <em>n</em> <span class="unit">(rpm)</span>
+                </label>
+                <input type="number" id="input-speed" class="form-input"
+                       placeholder="用于磨损校核" min="0" step="1" value="0">
+              </div>
+            </div>
+          </div>
+
+          <!-- 按钮 -->
+          <button class="btn btn-primary" onclick="calcSpline()" style="margin-top:8px">
+            🔍 开始计算
+          </button>
+          <button class="btn btn-secondary" onclick="resetSpline()"
+                  style="width:100%;margin-top:8px">
+            ↺ 重置
+          </button>
+
+          <!-- 快捷示例 -->
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('motor')">
+                电机轴花键
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('small')">
+                小模数
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('large')">
+                大模数
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 花键右侧结果 ========== -->
+    <div class="result-panel active" id="results-spline">
+      <div class="empty-state" id="empty-state-spline">
+        <div class="icon">📋</div>
+        <p>输入参数后点击 <strong>"开始计算"</strong></p>
+        <p style="font-size:0.8rem;margin-top:4px">所有计算严格遵循 GB/T 3478.1-2008</p>
+      </div>
+    </div>
+
+  </div><!-- /#panel-spline -->
+
+  <!-- ==========================================================
+       Tab 2: 平键校核
+       ========================================================== -->
+  <div class="tab-panel" id="panel-keyway">
+
+    <!-- ========== 平键左侧输入面板 ========== -->
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">🔑</span> 平键输入参数
+        </div>
+        <div class="card-body">
+          <!-- 轴径 -->
+          <div class="form-group">
+            <label class="form-label">
+              轴径 <em>d</em> <span class="unit">(mm)</span>
+            </label>
+            <input type="number" id="key-input-d" class="form-input"
+                   placeholder="例: 50" min="6" max="500" step="0.5" value="50"
+                   onchange="onKeyShaftChange()">
+          </div>
+
+          <!-- 键型 + 键长 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">键类型</label>
+              <select id="key-input-type" class="form-select" onchange="onKeyTypeChange()">
+                <option value="A" selected>A型（圆头）— 应用最广</option>
+                <option value="B">B型（方头）— 承载面积大</option>
+                <option value="C">C型（单圆头）— 轴端用</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                键长 <em>L</em> <span class="unit">(mm)</span>
+              </label>
+              <input type="number" id="key-input-length" class="form-input"
+                     placeholder="0=自动推荐" min="0" step="1" value="0">
+            </div>
+          </div>
+
+          <!-- 推荐键截面（自动显示） -->
+          <div class="alert alert-info" id="key-dim-hint" style="font-family:var(--font-mono);font-size:0.8rem">
+            📐 输入轴径后自动查询标准键截面尺寸
+          </div>
+
+          <!-- 载荷与材料 -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              🛡️ 载荷与材料
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">载荷类型</label>
+              <select id="key-input-load" class="form-select">
+                <option value="static" selected>静载荷 — 平稳传动</option>
+                <option value="lightImpact">轻微冲击 — 轻度振动、频繁启停</option>
+                <option value="heavyImpact">冲击载荷 — 强烈冲击、正反转、重载</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">轮毂材料</label>
+              <select id="key-input-hub" class="form-select" onchange="toggleCustomMaterial('key-input-hub','custom-key-hub')">
+                <option value="steel" selected>钢（45钢/40Cr/ZG310-570）</option>
+                <option value="castIron">铸铁（HT200/HT250）</option>
+                <option value="custom">🖊️ 自定义轮毂材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-key-hub">
+                <div class="custom-title">✏️ 自定义轮毂许用应力</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">材料名称</label>
+                    <input type="text" id="ck-hubName" class="form-input" placeholder="自定义轮毂">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">[σ<sub>p</sub>] 许用挤压 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="ck-sigmaP" class="form-input" placeholder="140" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">[τ] 许用剪切 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="ck-tau" class="form-input" placeholder="90" min="1" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">键材料</label>
+              <select id="key-input-keymat" class="form-select" onchange="toggleCustomMaterial('key-input-keymat','custom-key-mat')">
+                <option value="45钢" selected>45钢 — 标准平键</option>
+                <option value="40Cr">40Cr — 重载键</option>
+                <option value="35钢">35钢 — 轻载键</option>
+                <option value="custom">🖊️ 自定义键材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-key-mat">
+                <div class="custom-title">✏️ 自定义键材料</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">材料名称/硬度</label>
+                    <input type="text" id="ck-keyName" class="form-input" placeholder="自定义键材料">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 转矩/功率输入 -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              📊 载荷输入
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                传递转矩 <em>T</em> <span class="unit">(N·m)</span>
+              </label>
+              <input type="number" id="key-input-torque" class="form-input"
+                     placeholder="例: 300" min="0" step="1" value="300">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">
+                  功率 <em>P</em> <span class="unit">(kW)</span>
+                </label>
+                <input type="number" id="key-input-power" class="form-input"
+                       placeholder="非必填" min="0" step="0.1" value="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">
+                  转速 <em>n</em> <span class="unit">(rpm)</span>
+                </label>
+                <input type="number" id="key-input-speed" class="form-input"
+                       placeholder="rpm" min="0" step="1" value="0">
+              </div>
+            </div>
+          </div>
+
+          <!-- 按钮 -->
+          <button class="btn btn-primary" onclick="calcKeyway()" style="margin-top:8px">
+            🔍 开始校核
+          </button>
+          <button class="btn btn-secondary" onclick="resetKeyway()"
+                  style="width:100%;margin-top:8px">
+            ↺ 重置
+          </button>
+
+          <!-- 快捷示例 -->
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadKeyExample('motor')">
+                标准电机轴
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadKeyExample('reducer')">
+                减速机输出
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadKeyExample('heavy')">
+                重载冲击
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 平键右侧结果 ========== -->
+    <div class="result-panel active" id="results-keyway">
+      <div class="empty-state" id="empty-state-keyway">
+        <div class="icon">🔑</div>
+        <p>输入轴径和转矩后点击 <strong>"开始校核"</strong></p>
+        <p style="font-size:0.8rem;margin-top:4px">键截面尺寸按 GB/T 1096-2003 自动查询</p>
+      </div>
+    </div>
+
+  </div><!-- /#panel-keyway -->
+
+  <!-- ==========================================================
+       Tab 3: 定子铁心-机座过盈配合
+       ========================================================== -->
+  <div class="tab-panel" id="panel-stator">
+
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header"><span class="icon">🏗️</span> 定子-机座过盈参数</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">铁心外径 = 配合面直径 <em>d</em> <span class="unit">(mm)</span></label>
+            <input type="number" id="sf-input-d" class="form-input" placeholder="例: 210" min="10" step="0.5" value="210">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">铁心内径 <em>d<sub>i</sub></em> <span class="unit">(mm)</span></label>
+              <input type="number" id="sf-input-di" class="form-input" placeholder="定子内孔" min="0" step="0.5" value="130">
+            </div>
+            <div class="form-group">
+              <label class="form-label">机座外径 <em>D<sub>o</sub></em> <span class="unit">(mm)</span></label>
+              <input type="number" id="sf-input-do" class="form-input" placeholder="例: 260" min="10" step="0.5" value="260">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">配合长度 <em>L</em> <span class="unit">(mm)</span></label>
+              <input type="number" id="sf-input-L" class="form-input" placeholder="铁心长度" min="1" step="0.5" value="160">
+            </div>
+            <div class="form-group">
+              <label class="form-label">直径过盈量 <em>δ</em> <span class="unit">(μm)</span></label>
+              <input type="number" id="sf-input-delta" class="form-input" placeholder="例: 50" min="1" step="1" value="50">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">铁心材料</label>
+              <select id="sf-input-core" class="form-select" onchange="toggleCustomMaterial('sf-input-core','custom-sf-core')">
+                <option value="硅钢片叠层_B50A470" selected>硅钢片 B50A470</option>
+                <option value="硅钢片叠层_B35AV1900">硅钢片 B35AV1900</option>
+                <option value="硅钢片叠层_B35A300">硅钢片 B35A300 (高牌号)</option>
+                <option value="custom">🖊️ 自定义铁心材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-sf-core">
+                <div class="custom-title">✏️ 自定义铁心材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">弹性模量 E <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csfc-E" class="form-input" placeholder="150000" min="1" step="1000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">泊松比 ν</label>
+                    <input type="number" id="csfc-nu" class="form-input" placeholder="0.27" min="0" max="0.5" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">线膨胀系数 α <span class="unit">(×10⁻⁶/°C)</span></label>
+                    <input type="number" id="csfc-alpha" class="form-input" placeholder="12.0" min="0" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">抗拉强度 σ<sub>b</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csfc-sigmaB" class="form-input" placeholder="300" min="1" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">机座材料</label>
+              <select id="sf-input-frame" class="form-select" onchange="toggleCustomMaterial('sf-input-frame','custom-sf-frame')">
+                <option value="铝合金_6061-T6" selected>铝合金 6061-T6</option>
+                <option value="铝合金_A380">铝合金 A380 (压铸)</option>
+                <option value="铸铁_HT200">铸铁 HT200</option>
+                <option value="铸铁_HT250">铸铁 HT250</option>
+                <option value="结构钢_Q235">结构钢 Q235</option>
+                <option value="结构钢_Q345">结构钢 Q345</option>
+                <option value="custom">🖊️ 自定义机座材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-sf-frame">
+                <div class="custom-title">✏️ 自定义机座材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">弹性模量 E <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csff-E" class="form-input" placeholder="70000" min="1" step="1000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">泊松比 ν</label>
+                    <input type="number" id="csff-nu" class="form-input" placeholder="0.33" min="0" max="0.5" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">线膨胀系数 α <span class="unit">(×10⁻⁶/°C)</span></label>
+                    <input type="number" id="csff-alpha" class="form-input" placeholder="23.0" min="0" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">屈服强度 σ<sub>s</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csff-sigmaS" class="form-input" placeholder="240" min="1" step="1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">抗拉强度 σ<sub>b</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csff-sigmaB" class="form-input" placeholder="290" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">摩擦副类型</label>
+                    <select id="csff-friction" class="form-select">
+                      <option value="" selected>自动判断</option>
+                      <option value="lamination_steel">硅钢片-钢</option>
+                      <option value="lamination_castIron">硅钢片-铸铁</option>
+                      <option value="lamination_aluminum">硅钢片-铝合金</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">📊 工况与许用应力</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">装配方式</label>
+                <select id="sf-input-asm" class="form-select">
+                  <option value="shrinkFit" selected>热装法（加热机座）</option>
+                  <option value="pressFit">压入法</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">载荷类型</label>
+                <select id="sf-input-load" class="form-select">
+                  <option value="static">静载荷</option>
+                  <option value="dynamic" selected>动载荷/轻微冲击</option>
+                  <option value="reversing">正反转/频繁启动</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">工作温度 <span class="unit">(°C)</span></label>
+                <input type="number" id="sf-input-Top" class="form-input" value="120" step="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">装配温度 <span class="unit">(°C)</span></label>
+                <input type="number" id="sf-input-Tamb" class="form-input" value="20" step="1">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">传递转矩 <em>T</em> <span class="unit">(N·m)</span> <span style="font-weight:400;color:var(--text-light)">— 可选</span></label>
+              <input type="number" id="sf-input-torque" class="form-input" placeholder="0=跳过扭矩校核" min="0" step="1" value="0">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">铁心许用拉应力 <span class="unit">(MPa)</span></label>
+                <input type="number" id="sf-input-sigmaCore" class="form-input" placeholder="留空=材料默认" min="0" step="1" value="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">机座许用拉应力 <span class="unit">(MPa)</span></label>
+                <input type="number" id="sf-input-sigmaFrame" class="form-input" placeholder="留空=材料默认" min="0" step="1" value="0">
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="calcStatorFrameUI()" style="margin-top:8px">🔍 开始校核</button>
+          <button class="btn btn-secondary" onclick="resetStatorFrame()" style="width:100%;margin-top:8px">↺ 重置</button>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadSFExample('alu')">铝机座中型电机</button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSFExample('castiron')">铸铁机座</button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSFExample('large')">大型电机</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-panel active" id="results-stator">
+      <div class="empty-state"><div class="icon">🏗️</div><p>输入参数后点击 <strong>"开始校核"</strong></p><p style="font-size:0.8rem;margin-top:4px">依据《机械设计手册》第五版 — 过盈联接</p></div>
+    </div>
+
+  </div><!-- /#panel-stator -->
+
+  <!-- ==========================================================
+       Tab 4: 转子铁心-转轴过盈配合
+       ========================================================== -->
+  <div class="tab-panel" id="panel-rotor">
+
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header"><span class="icon">🔄</span> 转子-转轴过盈参数</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">配合面直径 = 轴外径 <em>d</em> <span class="unit">(mm)</span></label>
+            <input type="number" id="rs-input-d" class="form-input" placeholder="例: 50" min="5" step="0.5" value="50">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">轴内径 <em>d<sub>i</sub></em> <span class="unit">(mm)</span></label>
+              <input type="number" id="rs-input-di" class="form-input" placeholder="0=实心轴" min="0" step="0.5" value="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">铁心外径 <em>D<sub>o</sub></em> <span class="unit">(mm)</span></label>
+              <input type="number" id="rs-input-do" class="form-input" placeholder="例: 150" min="10" step="0.5" value="150">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">配合长度 <em>L</em> <span class="unit">(mm)</span></label>
+              <input type="number" id="rs-input-L" class="form-input" placeholder="铁心长度" min="1" step="0.5" value="120">
+            </div>
+            <div class="form-group">
+              <label class="form-label">直径过盈量 <em>δ</em> <span class="unit">(μm)</span></label>
+              <input type="number" id="rs-input-delta" class="form-input" placeholder="例: 30" min="1" step="1" value="30">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">转轴材料</label>
+              <select id="rs-input-shaft" class="form-select" onchange="toggleCustomMaterial('rs-input-shaft','custom-rs-shaft')">
+                <option value="45钢" selected>45钢</option>
+                <option value="40Cr">40Cr</option>
+                <option value="42CrMo">42CrMo</option>
+                <option value="38CrMoAl">38CrMoAl (氮化)</option>
+                <option value="custom">🖊️ 自定义轴材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-rs-shaft">
+                <div class="custom-title">✏️ 自定义轴材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">弹性模量 E <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csrs-E" class="form-input" placeholder="206000" min="1" step="1000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">泊松比 ν</label>
+                    <input type="number" id="csrs-nu" class="form-input" placeholder="0.30" min="0" max="0.5" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">线膨胀系数 α <span class="unit">(×10⁻⁶/°C)</span></label>
+                    <input type="number" id="csrs-alpha" class="form-input" placeholder="11.5" min="0" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">屈服强度 σ<sub>s</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csrs-sigmaS" class="form-input" placeholder="355" min="1" step="1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">抗压强度 σ<sub>bc</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csrs-sigmaBC" class="form-input" placeholder="600" min="1" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">铁心材料</label>
+              <select id="rs-input-core" class="form-select" onchange="toggleCustomMaterial('rs-input-core','custom-rs-core')">
+                <option value="硅钢片叠层_B50A470" selected>硅钢片 B50A470</option>
+                <option value="硅钢片叠层_B35AV1900">硅钢片 B35AV1900</option>
+                <option value="硅钢片叠层_B35A300">硅钢片 B35A300 (高牌号)</option>
+                <option value="custom">🖊️ 自定义铁心材料...</option>
+              </select>
+              <div class="custom-material-panel" id="custom-rs-core">
+                <div class="custom-title">✏️ 自定义铁心材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">弹性模量 E <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csrc-E" class="form-input" placeholder="150000" min="1" step="1000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">泊松比 ν</label>
+                    <input type="number" id="csrc-nu" class="form-input" placeholder="0.27" min="0" max="0.5" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">线膨胀系数 α <span class="unit">(×10⁻⁶/°C)</span></label>
+                    <input type="number" id="csrc-alpha" class="form-input" placeholder="12.0" min="0" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">密度 ρ <span class="unit">(kg/m³)</span></label>
+                    <input type="number" id="csrc-rho" class="form-input" placeholder="7650" min="1" step="10">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">抗拉强度 σ<sub>b</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="csrc-sigmaB" class="form-input" placeholder="300" min="1" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">📊 工况与转速</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">转速 <em>n</em> <span class="unit">(rpm)</span></label>
+                <input type="number" id="rs-input-speed" class="form-input" placeholder="例: 3000" min="0" step="1" value="3000">
+              </div>
+              <div class="form-group">
+                <label class="form-label">传递转矩 <em>T</em> <span class="unit">(N·m)</span></label>
+                <input type="number" id="rs-input-torque" class="form-input" placeholder="例: 200" min="0" step="1" value="200">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">装配方式</label>
+                <select id="rs-input-asm" class="form-select">
+                  <option value="shrinkFit" selected>热装法（加热铁心）</option>
+                  <option value="pressFit">压入法</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">载荷类型</label>
+                <select id="rs-input-load" class="form-select">
+                  <option value="static">静载荷</option>
+                  <option value="dynamic" selected>动载荷</option>
+                  <option value="reversing">正反转</option>
+                  <option value="highSpeed">高转速(>10000rpm)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">铁心温度 <span class="unit">(°C)</span></label>
+                <input type="number" id="rs-input-Tcore" class="form-input" value="100" step="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">轴温度 <span class="unit">(°C)</span></label>
+                <input type="number" id="rs-input-Tshaft" class="form-input" value="80" step="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">装配温度 <span class="unit">(°C)</span></label>
+                <input type="number" id="rs-input-Tamb" class="form-input" value="20" step="1">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">铁心许用拉应力 <span class="unit">(MPa)</span></label>
+                <input type="number" id="rs-input-sigmaCore" class="form-input" placeholder="留空=材料默认(300)" min="0" step="1" value="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">轴许用压应力 <span class="unit">(MPa)</span></label>
+                <input type="number" id="rs-input-sigmaShaft" class="form-input" placeholder="留空=材料默认" min="0" step="1" value="0">
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="calcRotorShaftUI()" style="margin-top:8px">🔍 开始校核</button>
+          <button class="btn btn-secondary" onclick="resetRotorShaft()" style="width:100%;margin-top:8px">↺ 重置</button>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadRSExample('standard')">通用工业电机</button>
+              <button class="btn btn-sm btn-secondary" onclick="loadRSExample('servo')">伺服/牵引电机</button>
+              <button class="btn btn-sm btn-secondary" onclick="loadRSExample('highspeed')">高速电机</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-panel active" id="results-rotor">
+      <div class="empty-state"><div class="icon">🔄</div><p>输入参数后点击 <strong>"开始校核"</strong></p><p style="font-size:0.8rem;margin-top:4px">依据《机械设计手册》第五版 — 过盈联接 + 离心力效应</p></div>
+    </div>
+
+  </div><!-- /#panel-rotor -->
+
+  <!-- ==========================================================
+       Tab 5: 轴承校核
+       ========================================================== -->
+  <div class="tab-panel" id="panel-bearing">
+
+    <!-- ========== 轴承左侧输入面板 ========== -->
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">🔧</span> 输入参数 <span style="font-weight:400;font-size:0.8rem;margin-left:auto">SKF / NSK</span>
+        </div>
+        <div class="card-body">
+
+          <!-- 模式选择器 -->
+          <div class="mode-selector">
+            <button class="mode-btn active" id="mode-btn-skf" onclick="toggleBearingMode('SKF')">🔵 常规转速 / SKF</button>
+            <button class="mode-btn" id="mode-btn-nsk" onclick="toggleBearingMode('NSK')">🔴 高速 / NSK</button>
+          </div>
+
+          <!-- 轴承类型 -->
+          <div class="form-group">
+            <label class="form-label">轴承类型</label>
+            <select id="brg-type" class="form-select" onchange="onBearingTypeChange()">
+              <option value="deepGrooveBall" selected>深沟球轴承 (6xxx)</option>
+              <option value="cylindricalRoller">圆柱滚子轴承 (NU/NJ)</option>
+              <option value="angularContactBall">角接触球轴承 (7xxx)</option>
+              <option value="taperedRoller">圆锥滚子轴承 (3xxx)</option>
+              <option value="sphericalRoller">调心滚子轴承 (2xxx)</option>
+            </select>
+          </div>
+
+          <!-- 角接触球轴承 接触角选择 -->
+          <div class="form-group" id="brg-ac-alpha-group" style="display:none">
+            <label class="form-label">接触角系列</label>
+            <select id="brg-ac-alpha" class="form-select">
+              <option value="15" selected>15° — C型 (高速)</option>
+              <option value="25">25° — A5型 (通用)</option>
+              <option value="40">40° — B型 (高轴向承载力)</option>
+            </select>
+          </div>
+
+          <!-- 型号来源 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">型号来源</label>
+              <select id="brg-source" class="form-select" onchange="toggleBearingSource()">
+                <option value="catalog" selected>从参考数据库选型</option>
+                <option value="manual">手动输入几何参数</option>
+              </select>
+            </div>
+            <div class="form-group" id="brg-db-group">
+              <label class="form-label">轴承型号</label>
+              <select id="brg-model" class="form-select" onchange="onBearingDBSelect()"></select>
+            </div>
+          </div>
+
+          <!-- 手动几何输入 -->
+          <div id="brg-manual-group" style="display:none">
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">内径 <em>d</em> <span class="unit">(mm)</span></label>
+                <input type="number" id="brg-d" class="form-input" placeholder="例: 40" min="5" step="0.1" value="40">
+              </div>
+              <div class="form-group">
+                <label class="form-label">外径 <em>D</em> <span class="unit">(mm)</span></label>
+                <input type="number" id="brg-D" class="form-input" placeholder="例: 80" min="10" step="0.1" value="80">
+              </div>
+              <div class="form-group">
+                <label class="form-label">宽度 <em>B</em> <span class="unit">(mm)</span></label>
+                <input type="number" id="brg-B" class="form-input" placeholder="例: 18" min="5" step="0.1" value="18">
+              </div>
+            </div>
+          </div>
+
+          <!-- 内部几何（自动填充） -->
+          <div id="brg-internal-group" style="display:none">
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">Dw <span class="unit">(mm)</span></label>
+                <input type="number" id="brg-Dw" class="form-input" placeholder="滚动体直径" step="0.01">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Z <span class="unit">(个)</span></label>
+                <input type="number" id="brg-Z" class="form-input" placeholder="滚动体数量" step="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Dpw <span class="unit">(mm)</span></label>
+                <input type="number" id="brg-Dpw" class="form-input" placeholder="节圆直径" step="0.1">
+              </div>
+            </div>
+          </div>
+
+          <!-- 额定值 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">动载荷 <em>C</em> <span class="unit">(kN)</span></label>
+              <input type="number" id="brg-C" class="form-input" placeholder="基本额定动载荷" min="0" step="0.1" value="32.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">静载荷 <em>C₀</em> <span class="unit">(kN)</span></label>
+              <input type="number" id="brg-C0" class="form-input" placeholder="基本额定静载荷" min="0" step="0.1" value="19.0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">疲劳极限 <em>Pu</em> <span class="unit">(kN)</span></label>
+            <input type="number" id="brg-Pu" class="form-input" placeholder="疲劳载荷极限（样本取值）" min="0" step="0.01" value="0.80">
+          </div>
+
+          <!-- 载荷与转速 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">径向载荷 <em>Fr</em> <span class="unit">(N)</span></label>
+              <input type="number" id="brg-Fr" class="form-input" placeholder="径向力" min="0" step="1" value="2000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">轴向载荷 <em>Fa</em> <span class="unit">(N)</span></label>
+              <input type="number" id="brg-Fa" class="form-input" placeholder="轴向力" min="0" step="1" value="500">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">转速 <em>n</em> <span class="unit">(rpm)</span></label>
+            <input type="number" id="brg-n" class="form-input" placeholder="运行转速" min="0" step="1" value="1500">
+          </div>
+
+          <!-- 润滑条件 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">润滑方式</label>
+              <select id="brg-lub" class="form-select">
+                <option value="grease" selected>脂润滑</option>
+                <option value="oil">油润滑</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" id="brg-lub-grade-label">ISO VG / 脂型号</label>
+              <select id="brg-isoVG" class="form-select">
+                <option value="68">ISO VG 68</option>
+                <option value="32">ISO VG 32</option>
+                <option value="46">ISO VG 46</option>
+                <option value="100">ISO VG 100</option>
+                <option value="150">ISO VG 150</option>
+                <option value="220">ISO VG 220</option>
+                <option value="g_LGMT2" selected>脂 — LGMT 2 (通用)</option>
+                <option value="g_LGMT3">脂 — LGMT 3 (高温)</option>
+                <option value="g_LGHP2">脂 — LGHP 2 (高性能)</option>
+                <option value="g_NSK_MTS">脂 — NSK MTS (超高速)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">清洁度</label>
+              <select id="brg-clean" class="form-select">
+                <option value="highClean">高度清洁</option>
+                <option value="normal" selected>正常清洁</option>
+                <option value="contaminated">轻度污染</option>
+                <option value="extremeClean">极度清洁</option>
+                <option value="dirty">严重污染</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">工作温度 <span class="unit">(°C)</span></label>
+              <input type="number" id="brg-temp" class="form-input" placeholder="例: 60" step="1" value="60">
+            </div>
+          </div>
+
+          <!-- SKF 专属参数 -->
+          <div class="skf-only">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">可靠度</label>
+                <select id="brg-reliability" class="form-select">
+                  <option value="90" selected>90% — L10m (标准)</option>
+                  <option value="95">95% — L5m (高可靠)</option>
+                  <option value="96">96% — L4m</option>
+                  <option value="97">97% — L3m</option>
+                  <option value="98">98% — L2m</option>
+                  <option value="99">99% — L1m (最高)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">工况类型</label>
+                <select id="brg-appType" class="form-select">
+                  <option value="normal" selected>正常运行</option>
+                  <option value="smooth">平稳运行</option>
+                  <option value="moderateShock">中等冲击</option>
+                  <option value="heavyShock">重冲击</option>
+                  <option value="highPrecision">高精度</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- NSK 专属参数 -->
+          <div class="nsk-only">
+            <div class="form-group">
+              <label class="form-label">轴承排列方式</label>
+              <select id="nsk-arrangement" class="form-select">
+                <option value="DB" selected>背对背 DB (O型)</option>
+                <option value="DF">面对面 DF (X型)</option>
+                <option value="DT">串联 DT</option>
+                <option value="TBT">三联 TBT</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">预紧级别</label>
+                <select id="nsk-preload" class="form-select" onchange="toggleNskCustomPreload()">
+                  <option value="L" selected>L (轻预紧)</option>
+                  <option value="EL">EL (超轻)</option>
+                  <option value="M">M (中预紧)</option>
+                  <option value="H">H (重预紧)</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </div>
+              <div class="form-group" id="nsk-custom-force-group" style="display:none">
+                <label class="form-label">预紧力 <span class="unit">(N)</span></label>
+                <input type="number" id="nsk-customForce" class="form-input" placeholder="例: 200" min="0" step="1" value="200">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">保持架</label>
+                <select id="nsk-cage" class="form-select">
+                  <option value="phenolic" selected>酚醛树脂 (TR)</option>
+                  <option value="machined_brass">车制黄铜</option>
+                  <option value="peek">PEEK</option>
+                  <option value="pressed_steel">冲压钢</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">球材料</label>
+                <select id="nsk-ball" class="form-select">
+                  <option value="steel" selected>轴承钢 SUJ2</option>
+                  <option value="ceramic">陶瓷 Si₃N₄</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">精度等级</label>
+              <select id="nsk-precision" class="form-select">
+                <option value="P5" selected>P5 — 精密级 (ABEC-5)</option>
+                <option value="P4">P4 — 超精密 (ABEC-7)</option>
+                <option value="P2">P2 — 超高精密 (ABEC-9)</option>
+                <option value="P6">P6 — 高级</option>
+                <option value="P0">P0 — 普通级</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 轴系力学参数 -->
+          <div class="form-group" style="margin-top:8px">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="brg-includeShaft" onchange="toggleShaftSection()" style="width:16px;height:16px">
+              <span>🛠️ 包含轴系力学分析（弯曲模态 + 挠度 + 扭转刚度）</span>
+            </label>
+          </div>
+          <div id="brg-shaft-group" style="display:none">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">轴径 <span class="unit">(mm)</span></label>
+                <input type="number" id="shaft-d" class="form-input" placeholder="例: 40" min="5" step="0.1" value="40">
+              </div>
+              <div class="form-group">
+                <label class="form-label">轴承跨距 <span class="unit">(mm)</span></label>
+                <input type="number" id="shaft-L" class="form-input" placeholder="例: 300" min="10" step="0.1" value="300">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">轴承1径向刚度 <span class="unit">(N/μm)</span></label>
+                <input type="number" id="shaft-k1" class="form-input" placeholder="手动输入或自动获取" min="1" step="0.1" value="80">
+              </div>
+              <div class="form-group">
+                <label class="form-label">轴承2径向刚度 <span class="unit">(N/μm)</span></label>
+                <input type="number" id="shaft-k2" class="form-input" placeholder="手动输入或自动获取" min="1" step="0.1" value="80">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">轴材料</label>
+                <select id="shaft-mat" class="form-select">
+                  <option value="45钢" selected>45钢</option>
+                  <option value="40Cr">40Cr</option>
+                  <option value="42CrMo">42CrMo</option>
+                  <option value="38CrMoAl">38CrMoAl</option>
+                  <option value="20CrMnTi">20CrMnTi</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">转子质量 <span class="unit">(kg)</span></label>
+                <input type="number" id="shaft-mrotor" class="form-input" placeholder="例: 20" min="0.1" step="0.1" value="20">
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div style="margin-top:12px">
+            <button class="btn btn-primary" style="width:100%" onclick="calcBearingUI()">🔍 开始校核计算</button>
+            <div style="margin-top:8px;display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" style="flex:1" onclick="resetBearing()">↺ 重置</button>
+            </div>
+            <div class="example-btn-group">
+              <button class="btn btn-secondary btn-sm" onclick="loadBearingExample('motor')">📋 电机 6208</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadBearingExample('nsk')">⚡ NSK高速主轴</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadBearingExample('full')">🛠️ 含轴系分析</button>
+            </div>
+          </div>
+
+        </div><!-- /.card-body -->
+      </div><!-- /.card -->
+    </div><!-- /.input-panel -->
+
+    <!-- ========== 轴承右侧结果面板 ========== -->
+    <div class="result-panel active" id="results-bearing">
+      <div class="empty-state">
+        <div class="icon">🔧</div>
+        <p>选择轴承参数后点击 <strong>"开始校核计算"</strong></p>
+        <p style="font-size:0.8rem;margin-top:4px">常规转速：SKF 方法 | 高速：NSK 方法</p>
+      </div>
+    </div><!-- /.result-panel -->
+
+  </div><!-- /#panel-bearing -->
+
+  <!-- ==========================================================
+       Tab 6: 屏蔽套失效计算
+       ========================================================== -->
+  <div class="tab-panel" id="panel-sleeve">
+
+    <!-- ========== 屏蔽套左侧输入面板 ========== -->
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">🛡️</span> 屏蔽套参数
+        </div>
+        <div class="card-body">
+
+          <!-- 几何参数 -->
+          <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+            📐 几何参数
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">半径 <em>R</em> <span class="unit">(mm)</span></label>
+              <input type="number" id="slv-input-R" class="form-input"
+                     placeholder="例: 50" min="5" step="0.5" value="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">长度 <em>L</em> <span class="unit">(mm)</span></label>
+              <input type="number" id="slv-input-L" class="form-input"
+                     placeholder="例: 200" min="10" step="0.5" value="200">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">单层厚度 <em>t<sub>ply</sub></em> <span class="unit">(mm)</span></label>
+              <input type="number" id="slv-input-tply" class="form-input"
+                     placeholder="例: 0.125" min="0.05" step="0.01" value="0.125"
+                     onchange="updateSleeveTotalThickness()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">铺层数 <em>n</em></label>
+              <input type="number" id="slv-input-nlayers" class="form-input"
+                     placeholder="例: 16" min="2" step="2" value="16"
+                     onchange="updateSleeveTotalThickness()">
+            </div>
+          </div>
+          <div class="alert alert-info" id="slv-thickness-hint" style="font-family:var(--font-mono);font-size:0.8rem">
+            📐 总壁厚 t = 16 × 0.125 = 2.00 mm &nbsp;|&nbsp; R/t = 25.0
+          </div>
+
+          <!-- 铺层设计 -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              🧵 铺层设计
+            </div>
+            <div class="form-group">
+              <label class="form-label">铺层模板</label>
+              <select id="slv-input-layup" class="form-select" onchange="onSleeveLayupChange()">
+                <option value="AP45" selected>[±45°] 角度铺层 — 抗扭/抗剪</option>
+                <option value="CROSS">[0°/90°] 正交铺层 — 兼顾轴向+环向</option>
+                <option value="HOOP">[90°] 环向增强 — 抗外压</option>
+                <option value="QUASI">[0°/90°/±45°] 准各向同性</option>
+                <option value="AXIAL">[0°] 轴向增强</option>
+                <option value="CUSTOM">🖊️ 自定义...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">铺层角度序列（逗号分隔，0°=轴向）</label>
+              <input type="text" id="slv-input-angles" class="form-input ply-angle-input"
+                     placeholder="例: 45,-45" value="45,-45">
+            </div>
+          </div>
+
+          <!-- 材料选择 -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              🧪 复合材料
+            </div>
+            <div class="form-group">
+              <label class="form-label">材料预设</label>
+              <select id="slv-input-material" class="form-select" onchange="toggleCustomMaterial('slv-input-material','custom-sleeve')">
+                <option value="CFRP_T700" selected>碳纤维 T700/环氧</option>
+                <option value="CFRP_T800">碳纤维 T800/环氧</option>
+                <option value="CFRP_M40J">碳纤维 M40J/环氧</option>
+                <option value="GFRP_Eglass">玻璃纤维 E-Glass/环氧</option>
+                <option value="GFRP_Sglass">玻璃纤维 S2-Glass/环氧</option>
+                <option value="AFRP_Kevlar49">芳纶纤维 Kevlar49/环氧</option>
+                <option value="custom">🖊️ 自定义材料...</option>
+              </select>
+              <!-- 自定义材料面板 -->
+              <div class="custom-material-panel" id="custom-sleeve">
+                <div class="custom-title">✏️ 自定义复合材料属性</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">E₁ <span class="unit">(GPa)</span></label>
+                    <input type="number" id="cs-E1" class="form-input" placeholder="135" min="0.1" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">E₂ <span class="unit">(GPa)</span></label>
+                    <input type="number" id="cs-E2" class="form-input" placeholder="8.5" min="0.1" step="0.1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">G₁₂ <span class="unit">(GPa)</span></label>
+                    <input type="number" id="cs-G12" class="form-input" placeholder="4.5" min="0.1" step="0.1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">ν₁₂</label>
+                    <input type="number" id="cs-nu12" class="form-input" placeholder="0.30" min="0" max="0.5" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">X<sub>t</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-Xt" class="form-input" placeholder="2100" min="1" step="10">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">X<sub>c</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-Xc" class="form-input" placeholder="1300" min="1" step="10">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Y<sub>t</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-Yt" class="form-input" placeholder="50" min="1" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Y<sub>c</sub> <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-Yc" class="form-input" placeholder="170" min="1" step="1">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">S <span class="unit">(MPa)</span></label>
+                  <input type="number" id="cs-S" class="form-input" placeholder="80" min="1" step="1">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工况与设计压力 -->
+          <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--primary);margin-bottom:8px">
+              📊 工况条件
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">承压方向</label>
+                <select id="slv-input-pressure" class="form-select">
+                  <option value="external" selected>外部压力（油在绕组侧）</option>
+                  <option value="internal">内部压力（油在转子腔）</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">端部条件</label>
+                <select id="slv-input-end" class="form-select">
+                  <option value="simplySupported" selected>简支</option>
+                  <option value="clamped">固支</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">轴向端盖</label>
+                <select id="slv-input-axial" class="form-select">
+                  <option value="capped" selected>带端盖（承受轴向力）</option>
+                  <option value="free">无端盖（开放）</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">设计压力 <em>p<sub>design</sub></em> <span class="unit">(MPa)</span></label>
+                <input type="number" id="slv-input-pdesign" class="form-input"
+                       placeholder="例: 2" min="0.01" step="0.05" value="2">
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <button class="btn btn-primary" onclick="calcSleeveUI()" style="margin-top:8px">
+            🔍 开始分析
+          </button>
+          <button class="btn btn-secondary" onclick="resetSleeve()"
+                  style="width:100%;margin-top:8px">
+            ↺ 重置
+          </button>
+
+          <!-- 快捷示例 -->
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadSleeveExample('cfrp')">
+                CFRP 外压
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSleeveExample('gfrp')">
+                GFRP 内压
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSleeveExample('thin')">
+                薄壁极限
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 屏蔽套右侧结果面板 ========== -->
+    <div class="result-panel active" id="results-sleeve">
+      <div class="empty-state" id="empty-state-sleeve">
+        <div class="icon">🛡️</div>
+        <p>输入参数后点击 <strong>"开始分析"</strong></p>
+        <p style="font-size:0.8rem;margin-top:4px">
+          基于 Vasiliev 屈曲理论 + Tsai-Wu 复合材料失效准则
+        </p>
+      </div>
+    </div>
+
+  </div><!-- /#panel-sleeve -->
+
+</div>
+
+<!-- ============================================================
+     JavaScript 引用
+     ============================================================ -->
+<!-- 计算层 -->
+<script src="data.js"></script>
+<script src="calc.js"></script>
+<script src="key-data.js"></script>
+<script src="key-calc.js"></script>
+<script src="pressfit-data.js"></script>
+<script src="stator-frame-calc.js"></script>
+<script src="rotor-shaft-calc.js"></script>
+<script src="bearing-data.js"></script>
+<script src="bearing-calc.js"></script>
+<script src="sleeve-data.js"></script>
+<script src="sleeve-calc.js"></script>
+<!-- 界面层（按 Tab 拆分） -->
+<script src="tab-spline.js"></script>
+<script src="tab-keyway.js"></script>
+<script src="tab-stator.js"></script>
+<script src="tab-rotor.js"></script>
+<script src="tab-bearing.js"></script>
+<script src="tab-sleeve.js"></script>
+
+<script>
+// ============================================================
+// 共享界面层 — 通用工具 + Tab 切换 + 初始化
+// 所有计算均调用对应 calc 层暴露的函数
+// 禁止在页面内编写任何计算公式
+// ============================================================
+
+// ---- 通用工具函数 ----
+/**
+ * 切换自定义材料面板的显示/隐藏
+ * @param {string} selectId - select 元素 ID
+ * @param {string} panelId - 自定义面板 ID
+ */
+function toggleCustomMaterial(selectId, panelId) {
+  var select = document.getElementById(selectId);
+  var panel = document.getElementById(panelId);
+  if (!select || !panel) return;
+  panel.style.display = select.value === 'custom' ? 'block' : 'none';
+}
+
+/**
+ * 读取自定义材料字段数值，未填返回 undefined
+ * @param {string} id - input 元素 ID
+ * @returns {number|undefined}
+ */
+function readCustomVal(id) {
+  var el = document.getElementById(id);
+  if (!el) return undefined;
+  var v = parseFloat(el.value);
+  return isNaN(v) ? undefined : v;
+}
+
+// ================================================================
+// Tab 切换
+// ================================================================
+function switchTab(tab) {
+  // 更新 Tab 按钮状态
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  // 更新 Tab 面板状态
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+
+  // 更新标题和副标题
+  const headerTitle = document.getElementById('header-title');
+  const headerSubtitle = document.getElementById('header-subtitle');
+  const headerBadge = document.getElementById('header-badge');
+
+  if (tab === 'spline') {
+    headerTitle.innerHTML = '⚙️ 渐开线花键参数计算工具';
+    headerSubtitle.textContent = 'Involute Spline Parameter Calculator';
+    headerBadge.textContent = 'GB/T 3478.1-2008';
+  } else if (tab === 'keyway') {
+    headerTitle.innerHTML = '🔑 平键联接校核工具';
+    headerSubtitle.textContent = 'Flat Key Connection Strength Check';
+    headerBadge.textContent = 'GB/T 1096-2003';
+  } else if (tab === 'stator') {
+    headerTitle.innerHTML = '🏗️ 定子铁心-机座过盈配合校核';
+    headerSubtitle.textContent = 'Stator Core-Frame Interference Fit';
+    headerBadge.textContent = 'GB/T 5371-2004';
+  } else if (tab === 'rotor') {
+    headerTitle.innerHTML = '🔄 转子铁心-转轴过盈配合校核';
+    headerSubtitle.textContent = 'Rotor Core-Shaft Interference Fit';
+    headerBadge.textContent = 'GB/T 5371-2004';
+  } else if (tab === 'bearing') {
+    headerTitle.innerHTML = '🔧 滚动轴承校核计算工具';
+    headerSubtitle.textContent = 'Rolling Bearing Selection & Verification';
+    headerBadge.textContent = 'SKF / NSK / ISO 281';
+  } else if (tab === 'sleeve') {
+    headerTitle.innerHTML = '🛡️ 屏蔽套失效计算工具';
+    headerSubtitle.textContent = 'Sleeve Buckling & Composite Failure Analysis';
+    headerBadge.textContent = 'CLT + Vasiliev + Tsai-Wu';
+  }
+}
+
+// ================================================================
+// 页面初始化
+// ================================================================
+window.addEventListener('DOMContentLoaded', () => {
+  // 初始化花键面板
+  initSpline();
+  // 初始化平键面板
+  onKeyShaftChange();
+  // 初始化轴承面板
+  onBearingTypeChange();
+  populateBearingModels('deepGrooveBall');
+  // 初始化屏蔽套面板
+  updateSleeveTotalThickness();
+  // 默认显示花键标签，自动计算一次默认示例
+  calcSpline();
+});
+</script>
+
+</body>
+</html>

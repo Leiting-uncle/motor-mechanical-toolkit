@@ -1,0 +1,654 @@
+/* ============================================================
+   样式表 — 专业工程计算工具风格
+   配色方案：深蓝灰主色调，清晰的层次结构
+   ============================================================ */
+:root {
+  --primary: #1a3a5c;
+  --primary-light: #2d5f8a;
+  --accent: #e67e22;
+  --bg: #f5f6f8;
+  --card-bg: #ffffff;
+  --border: #dde1e6;
+  --text: #2c3e50;
+  --text-secondary: #6b7c93;
+  --text-light: #95a5b8;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --info: #2980b9;
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+               'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ---- 顶部导航栏 ---- */
+.header {
+  background: var(--primary);
+  color: #fff;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 12px 24px 0 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.header-left h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.header-left .subtitle {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  font-weight: 400;
+  margin-bottom: 2px;
+}
+.header .badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  margin-bottom: 10px;
+}
+
+/* ---- Tab 切换按钮 ---- */
+.tab-nav {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 24px;
+  background: var(--primary);
+  display: flex;
+  gap: 0;
+}
+.tab-btn {
+  padding: 10px 24px;
+  background: transparent;
+  color: rgba(255,255,255,0.65);
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.tab-btn:hover {
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.05);
+}
+.tab-btn.active {
+  color: #fff;
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.tab-btn .tab-icon { margin-right: 6px; }
+
+/* ---- 主布局 ---- */
+.main-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* 面板内容默认隐藏，active 时显示 */
+.tab-panel { display: none; }
+.tab-panel.active { display: contents; }
+/* 结果面板也跟随切换 */
+.result-panel { display: none; }
+.result-panel.active { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---- 卡片 ---- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.card-header {
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-header .icon {
+  width: 20px;
+  text-align: center;
+}
+.card-body {
+  padding: 16px;
+}
+
+/* ---- 输入面板 ---- */
+.input-panel {
+  position: sticky;
+  top: 110px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+.form-group:last-child { margin-bottom: 0; }
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.form-label .unit {
+  font-weight: 400;
+  color: var(--text-light);
+  font-size: 0.75rem;
+}
+.form-input, .form-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(45,95,138,0.1);
+}
+.form-input::placeholder { color: #c0c8d4; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+}
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  width: 100%;
+}
+.btn-primary:hover { background: var(--primary-light); }
+.btn-secondary {
+  background: #fff;
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: #f5f6f8; }
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+/* ---- 结果面板 ---- */
+.results-panel {
+  /* 由 .result-panel.active 控制 */
+}
+
+.section-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.section-card.collapsed .section-body { display: none; }
+.section-header {
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.section-header:hover { background: #f0f2f5; }
+.section-body { padding: 16px; }
+
+/* ---- 参数表格 ---- */
+.param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.param-table th, .param-table td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eef0f4;
+}
+.param-table th {
+  background: #f8f9fb;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.param-table td:last-child {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.param-table tr:hover td { background: #fafbfd; }
+.param-table .sub-header td {
+  background: #eef2f8;
+  font-weight: 600;
+  color: var(--primary-light);
+  font-size: 0.8rem;
+  padding: 5px 12px;
+}
+.param-table .tolerance-row td:last-child {
+  font-size: 0.78rem;
+}
+
+/* ---- 公式展示 ---- */
+.formula-block {
+  background: #f8f9fb;
+  border-left: 3px solid var(--primary-light);
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+  border-radius: 0 4px 4px 0;
+  overflow-x: auto;
+}
+.formula-block .formula-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-sans);
+}
+
+/* ---- 状态标签 ---- */
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.status-qualified { background: #d5f5e3; color: #1e8449; }
+.status-warning { background: #fdebd0; color: #b7950b; }
+.status-fail { background: #fadbd8; color: #c0392b; }
+
+/* ---- 图例 ---- */
+.diagram {
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  margin: 12px 0;
+}
+.diagram svg { max-width: 100%; }
+
+/* ---- 空状态 ---- */
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-light);
+}
+.empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+
+/* ---- 响应式 ---- */
+@media (max-width: 900px) {
+  .main-container {
+    grid-template-columns: 1fr;
+  }
+  .input-panel {
+    position: static;
+  }
+  .header-inner {
+    padding: 10px 16px;
+  }
+  .header-left h1 { font-size: 1.1rem; }
+  .tab-btn { padding: 8px 14px; font-size: 0.8rem; }
+}
+
+/* ---- 打印样式 ---- */
+@media print {
+  .header { position: static; }
+  .input-panel { display: none; }
+  .tab-nav { display: none; }
+  .main-container {
+    display: block;
+    max-width: 100%;
+  }
+  .section-card { break-inside: avoid; }
+  .section-header { background: #eee !important; -webkit-print-color-adjust: exact; }
+  .tab-panel { display: contents !important; }
+  .result-panel { display: flex !important; flex-direction: column; gap: 16px; }
+}
+
+/* ---- 提示框 ---- */
+.tooltip {
+  position: relative;
+  display: inline-block;
+  border-bottom: 1px dotted var(--text-light);
+  cursor: help;
+}
+.tooltip .tooltip-text {
+  visibility: hidden;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 4px;
+  position: absolute;
+  z-index: 10;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-weight: 400;
+}
+.tooltip:hover .tooltip-text { visibility: visible; }
+
+/* 标签组 */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #e8ecf2;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* 状态描述行 */
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  padding: 4px 0;
+}
+.info-row .label {
+  color: var(--text-secondary);
+  min-width: 80px;
+  font-weight: 500;
+}
+.info-row .value {
+  font-family: var(--font-mono);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* 警告横条 */
+.alert {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  margin: 8px 0;
+}
+.alert-info { background: #eaf2f8; border-left: 3px solid var(--info); color: #1a5276; }
+.alert-warning { background: #fef9e7; border-left: 3px solid var(--warning); color: #7d6608; }
+.alert-danger { background: #fdedec; border-left: 3px solid var(--danger); color: #922b21; }
+.alert-success { background: #eafaf1; border-left: 3px solid var(--success); color: #1e8449; }
+
+/* 键截面缩略图 */
+.key-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.key-profile svg { max-width: 420px; }
+
+/* 分隔线 */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+/* 自定义材料面板 */
+.custom-material-panel {
+  display: none;
+  padding: 8px 10px;
+  margin-top: 6px;
+  background: #f8f9fb;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.custom-material-panel .custom-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.custom-material-panel .form-group {
+  margin-bottom: 6px;
+}
+.custom-material-panel .form-label {
+  font-size: 0.72rem;
+}
+.custom-material-panel .form-input {
+  padding: 5px 8px;
+  font-size: 0.8rem;
+}
+
+/* ---- 轴承 Tab: 模式选择器 ---- */
+.mode-selector {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.15s;
+  text-align: center;
+}
+.mode-btn:hover { background: #f0f4f8; }
+.mode-btn.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.mode-btn:first-child { border-right: 1px solid var(--border); }
+
+/* NSK 条件显示 */
+.nsk-only { display: none; }
+.skf-only { display: block; }
+.mode-nsk .nsk-only { display: block; }
+.mode-nsk .skf-only { display: none; }
+
+/* 轴截面行 */
+.shaft-section-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+/* 计算结果中的 dm·n 突出显示 */
+.dmn-highlight {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 1.1em;
+}
+
+/* 快速示例按钮组 */
+.example-btn-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.example-btn-group .btn-sm {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+}
+
+/* ---- 屏蔽套 Tab 专属样式 ---- */
+
+/* 铺层角度输入 */
+.ply-angle-input {
+  font-family: var(--font-mono);
+  font-size: 0.85rem !important;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+/* Canvas 图表容器 */
+.can-chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.can-chart-container canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 失效机制图图例 */
+.map-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  font-size: 0.78rem;
+  justify-content: center;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.map-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+
+/* 铺层应力表 */
+.ply-stress-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ply-stress-table th { background: #f8f9fb; font-weight: 600; padding: 6px 8px; text-align: center; border-bottom: 2px solid var(--border); }
+.ply-stress-table td { padding: 5px 8px; text-align: center; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.78rem; }
+.ply-stress-table .critical-row { background: #fff0f0 !important; }
+.ply-stress-table .critical-row td { font-weight: 700; color: var(--danger); }
+.ply-stress-table td:first-child { font-weight: 600; }
+
+/* ABD 矩阵显示 */
+.matrix-display {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  padding: 8px 12px;
+  background: #f8f9fb;
+  border-radius: 4px;
+}
+
+/* 壁厚提示行 */
+.thickness-info {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--primary);
+  background: #eaf2f8;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+/* 主导失效模式标签 */
+.failure-mode-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.failure-mode-tag.buckling {
+  background: #d5e8f5;
+  color: #1a5276;
+}
+.failure-mode-tag.material {
+  background: #fdebd0;
+  color: #b7950b;
+}
