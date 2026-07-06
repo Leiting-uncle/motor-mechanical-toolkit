@@ -28,52 +28,101 @@ function updatePinSuggestion() {
   }
 }
 
-// ---- 加载示例 ----
+// ---- 加载示例 (GB/T 3478.1-2008 附录 C) ----
 function loadSplineExample(type) {
+  // 所有 5 个几何示例共用: m=1.0, z=25, pin=0(自动), power=0, speed=0, moment=0
+  var pin=0, power=0, speed=0, moment=0;
+  var torque=0; // 几何示例不涉及强度，转矩=0 跳过校核
+
+  // 强度校核示例 (GB/T 17855-1999 例1) 参数
+  if (type === 'gb17855') {
+    // 重置自定义材料面板
+    var csPanel = document.getElementById('custom-spline');
+    if (csPanel) csPanel.style.display = 'block';
+
+    document.getElementById('input-m').value = '2';
+    document.getElementById('input-z').value = '44';
+    document.getElementById('input-grade').value = '5';
+    document.getElementById('input-fit').value = 'H/h';
+    document.getElementById('input-root').value = 'filletRoot';
+    document.getElementById('input-pin').value = '0';
+    document.getElementById('input-length').value = '32';
+    document.getElementById('input-torque').value = '0';
+    document.getElementById('input-power').value = '1500';
+    document.getElementById('input-speed').value = '1250';
+    document.getElementById('input-material').value = 'custom';
+    document.getElementById('input-moment').value = '0';
+
+    // 填充自定义材料：优质合金钢 σ_0.2≥835, σ_b≥980, HB 293-341
+    var csC = document.getElementById('cs-compression'); if (csC) csC.value = '200';
+    var csS = document.getElementById('cs-shear'); if (csS) csS.value = '120';
+    var csB = document.getElementById('cs-bending'); if (csB) csB.value = '250';
+    var csPV = document.getElementById('cs-wearPV'); if (csPV) csPV.value = '8';
+    var csWF = document.getElementById('cs-wearFree'); if (csWF) csWF.value = '100';
+    var csH = document.getElementById('cs-hardness'); if (csH) csH.value = '优质合金钢 HB293-341';
+
+    // 设置计算方法为 GB/T 17855-1999
+    var methodSel = document.getElementById('input-method');
+    if (methodSel) methodSel.value = 'gb17855';
+    // 设置工况类型
+    var appSel = document.getElementById('input-appType');
+    if (appSel) appSel.value = 'gasTurbine_propeller';
+
+    updatePinSuggestion();
+    calcSpline();
+    return;
+  }
+
   switch(type) {
-    case 'motor':
-      document.getElementById('input-m').value = '2';
+    case 'c1': // C.1 INT 25z×1.0m×30P×5H — 内花键 平齿根 5级 H配合
+      document.getElementById('input-m').value = '1';
       document.getElementById('input-z').value = '25';
-      document.getElementById('input-grade').value = '6';
+      document.getElementById('input-grade').value = '5';
       document.getElementById('input-fit').value = 'H/h';
       document.getElementById('input-root').value = 'flatRoot';
-      document.getElementById('input-pin').value = '0';
-      document.getElementById('input-length').value = '50';
-      document.getElementById('input-torque').value = '500';
-      document.getElementById('input-power').value = '75';
-      document.getElementById('input-speed').value = '1500';
-      document.getElementById('input-material').value = '40Cr调质';
-      document.getElementById('input-moment').value = '0';
       break;
-    case 'small':
-      document.getElementById('input-m').value = '0.75';
-      document.getElementById('input-z').value = '32';
-      document.getElementById('input-grade').value = '5';
-      document.getElementById('input-fit').value = 'H/f';
-      document.getElementById('input-root').value = 'flatRoot';
-      document.getElementById('input-pin').value = '0';
-      document.getElementById('input-length').value = '20';
-      document.getElementById('input-torque').value = '50';
-      document.getElementById('input-power').value = '15';
-      document.getElementById('input-speed').value = '3000';
-      document.getElementById('input-material').value = '20CrMnTi渗碳淬火';
-      document.getElementById('input-moment').value = '0';
-      break;
-    case 'large':
-      document.getElementById('input-m').value = '5';
-      document.getElementById('input-z').value = '20';
+    case 'c2': // C.2 INT 25z×1.0m×30R×7H — 内花键 圆齿根 7级 H配合
+      document.getElementById('input-m').value = '1';
+      document.getElementById('input-z').value = '25';
       document.getElementById('input-grade').value = '7';
+      document.getElementById('input-fit').value = 'H/h';
+      document.getElementById('input-root').value = 'filletRoot';
+      break;
+    case 'c3': // C.3 EXT 25z×1.0m×30R×4h — 外花键 圆齿根 4级 h配合
+      document.getElementById('input-m').value = '1';
+      document.getElementById('input-z').value = '25';
+      document.getElementById('input-grade').value = '4';
+      document.getElementById('input-fit').value = 'H/h';
+      document.getElementById('input-root').value = 'filletRoot';
+      break;
+    case 'c4': // C.4 EXT 25z×1.0m×30R×6e — 外花键 圆齿根 6级 e配合
+      document.getElementById('input-m').value = '1';
+      document.getElementById('input-z').value = '25';
+      document.getElementById('input-grade').value = '6';
       document.getElementById('input-fit').value = 'H/e';
       document.getElementById('input-root').value = 'filletRoot';
-      document.getElementById('input-pin').value = '0';
-      document.getElementById('input-length').value = '80';
-      document.getElementById('input-torque').value = '5000';
-      document.getElementById('input-power').value = '200';
-      document.getElementById('input-speed').value = '400';
-      document.getElementById('input-material').value = '42CrMo调质';
-      document.getElementById('input-moment').value = '0';
+      break;
+    case 'c5': // C.5 EXT 25z×1.0m×30P×5js — 外花键 平齿根 5级 js配合
+      document.getElementById('input-m').value = '1';
+      document.getElementById('input-z').value = '25';
+      document.getElementById('input-grade').value = '5';
+      document.getElementById('input-fit').value = 'H/js';
+      document.getElementById('input-root').value = 'flatRoot';
       break;
   }
+
+  document.getElementById('input-pin').value = pin;
+  document.getElementById('input-length').value = '12.5';  // GB示例: g=D/2=12.5mm
+  document.getElementById('input-torque').value = torque;
+  document.getElementById('input-power').value = power;
+  document.getElementById('input-speed').value = speed;
+  document.getElementById('input-material').value = '40Cr调质';
+  document.getElementById('input-moment').value = moment;
+
+  // 几何示例默认使用简化计算方法
+  var methodSel = document.getElementById('input-method');
+  if (methodSel) methodSel.value = 'simplified';
+
   updatePinSuggestion();
   calcSpline();
 }
@@ -121,6 +170,77 @@ function calcSpline() {
     alert('计算出错: ' + e.message);
     console.error(e);
     return;
+  }
+
+  // ---- GB/T 17855-1999 强度计算（可选） ----
+  var methodEl = document.getElementById('input-method');
+  var useMethod = methodEl ? methodEl.value : 'simplified';
+  var effectiveTorque = result.strength ? result.strength.torque : 0;
+
+  if (useMethod === 'gb17855' && effectiveTorque > 0) {
+    try {
+      // 从几何结果提取参数
+      var gb_D = result.basic.分度圆直径_D;
+      var gb_S_basic = result.basic.基本齿厚_S;
+      var gb_D_ee = result.external.大径_D_ee.basic;
+      var gb_D_ie = result.external.小径_D_ie.basic;
+      var gb_D_Fe = parseFloat(result.external.渐开线起始圆_D_Fe_min);
+      var gb_L_eng = result.tolerance.配合长度_L_mm;
+
+      // 工作齿高 h_w ≈ m（标准基本齿廓 ha*=0.5）
+      var gb_h_w = m;
+      // 全齿高 h = (D_ee - D_ie) / 2
+      var gb_h = (gb_D_ee - gb_D_ie) / 2;
+      // 齿根圆角半径 ρ
+      var profile = (root === 'filletRoot') ? 0.3 : 0.2;
+      var gb_rho = profile * m;
+
+      // 材料强度参数
+      var gb_sigma02, gb_sigmaB, gb_HB;
+      if (material === 'custom') {
+        // 自定义材料：从现有自定义参数推算强度
+        gb_sigma02 = Math.max(readCustomVal('cs-compression') || 200, 200) * 2.8;
+        gb_sigmaB = Math.max(gb_sigma02 * 1.17, 980);
+        gb_HB = 293; // 默认值
+      } else {
+        // 预设材料：从 MATERIAL_PROPERTIES 反推近似值
+        var matAllowComp = result.strength ? result.strength.contact.allowable_MPa : 140;
+        gb_sigma02 = matAllowComp * 2.8; // 近似：σ_0.2 ≈ 2.8 × [σ_H]
+        gb_sigmaB = gb_sigma02 * 1.17;  // 近似：σ_b ≈ 1.17 × σ_0.2
+        gb_HB = 280; // 默认
+      }
+
+      // 工况系数
+      var appEl = document.getElementById('input-appType');
+      var appKey = appEl ? appEl.value : 'gasTurbine_propeller';
+      var appFactors = GB17855_APP_TYPES[appKey] || GB17855_APP_TYPES['gasTurbine_propeller'];
+
+      // 磨损等级
+      var wearGrade = (gb_sigma02 >= 835) ? 'alloySteel_quenched' : 'carbonSteel_quenched';
+
+      var gbResult = calcGB17855All({
+        m: m, z: z,
+        D: gb_D, S_basic: gb_S_basic,
+        D_ee: gb_D_ee, D_ie: gb_D_ie, D_Fe: gb_D_Fe,
+        L_eng: gb_L_eng,
+        h_w: gb_h_w, h: gb_h, rho: gb_rho,
+        torque: effectiveTorque,
+        sigma02: gb_sigma02, sigmaB: gb_sigmaB, HB: gb_HB,
+        appFactors: appFactors,
+        wearGrade: wearGrade,
+        bendingMoment: moment
+      });
+
+      // 将 GB17855 结果附加到 result
+      result._gb17855 = gbResult;
+      result._method = 'gb17855';
+      result._appFactors = appFactors;
+    } catch (e) {
+      console.error('GB/T 17855-1999 计算出错，回退到简化方法:', e);
+      result._method = 'simplified';
+    }
+  } else {
+    result._method = 'simplified';
   }
 
   renderSplineResults(result);
@@ -237,6 +357,12 @@ function renderSplineResults(r) {
   // ====== Card 5: 强度校核 ======
   if (r.strength) {
     const s = r.strength;
+    const gb = r._gb17855;
+    const isGB = r._method === 'gb17855' && gb;
+    const appF = r._appFactors;
+    // 格式化辅助
+    function toN4(v) { return typeof v === 'number' ? v.toFixed(4) : v; }
+
     function strengthRow(label, symbol, value, unit, sf, threshold, status) {
       return `<tr>
         <td>${label}</td>
@@ -249,10 +375,97 @@ function renderSplineResults(r) {
     html += `
     <div class="section-card">
       <div class="section-header" onclick="this.parentElement.classList.toggle('collapsed')">
-        🛡️ 强度校核 — ${s.material} (${s.materialHardness}) · T = ${s.torque} N·m · <span style="font-size:0.72rem;color:var(--text-light)">《机械设计手册》第五版</span>
+        🛡️ 强度校核 — ${s.material} (${s.materialHardness}) · T = ${s.torque} N·m${isGB
+          ? ` · <span style="font-size:0.72rem;color:var(--accent);font-weight:600">GB/T 17855-1999</span> · S<sub>H</sub>=${appF.S_H} S<sub>F</sub>=${appF.S_F}`
+          : ` · <span style="font-size:0.72rem;color:var(--text-light)">《机械设计手册》第五版</span>`}
         <span style="font-size:0.75rem;color:var(--text-light)">▼</span>
       </div>
-      <div class="section-body">
+      <div class="section-body">`;
+
+    if (isGB) {
+      // ===== GB/T 17855-1999 详细展示 =====
+      html += `
+        <div style="font-size:0.75rem;color:var(--text-light);margin-bottom:8px">
+          ${s.torqueSource} | 工况：${appF ? appF.name : ''} |
+          K<sub>1</sub>=${appF.K1} K<sub>2</sub>=${appF.K2} K<sub>3</sub>=${appF.K3} K<sub>4</sub>=${appF.K4}
+        </div>
+        <div class="alert alert-info" style="margin-bottom:8px;font-size:0.78rem">
+          📐 中间计算：F<sub>t</sub> = 2000T/D = 2000×${s.torque}/${gb.input.D}
+          = <strong>${gb.loads.Ft_N} N</strong> &nbsp;|&nbsp;
+          W = F<sub>t</sub>/(z·l·cos30°) = <strong>${gb.loads.W_N_per_mm} N/mm</strong> &nbsp;|&nbsp;
+          h<sub>w</sub>=${gb.input.h_w} mm, h=${gb.input.h} mm, ρ=${gb.input.rho} mm
+        </div>
+        <table class="param-table">
+          <tr><th style="width:20%">校核项目</th><th style="width:30%">应力/值</th><th style="width:18%">安全系数</th><th style="width:32%">判定</th></tr>
+
+          <tr>
+            <td>① 齿面接触</td>
+            <td style="font-family:var(--font-mono)">σ<sub>H</sub> = ${gb.contact.sigma_H_MPa} ≤ [${gb.contact.allowable_MPa}] MPa</td>
+            <td style="font-family:var(--font-mono)">S<sub>H</sub> = ${gb.contact.safetyFactor}</td>
+            <td><span class="status-badge ${statusClass(gb.contact.status)}">${gb.contact.status}</span></td></tr>
+
+          <tr>
+            <td>② 齿根弯曲</td>
+            <td style="font-family:var(--font-mono)">σ<sub>F</sub> = ${gb.bending.sigma_F_MPa} ≤ [${gb.bending.allowable_MPa}] MPa</td>
+            <td style="font-family:var(--font-mono)">S<sub>F</sub> = ${gb.bending.safetyFactor}</td>
+            <td><span class="status-badge ${statusClass(gb.bending.status)}">${gb.bending.status}</span></td></tr>
+
+          <tr style="background:#fafbfc;font-size:0.78rem">
+            <td></td>
+            <td colspan="3"><span style="color:var(--text-light)">
+              S<sub>Fn</sub> = ${gb.bending.S_Fn_mm} mm &nbsp;|&nbsp;
+              D<sub>Fe</sub> = ${gb.input.D_Fe} mm &nbsp;|&nbsp;
+              S/D = ${toN4(gb.bending.sfnDetail.term_S_D)} &nbsp;|&nbsp;
+              invα<sub>D</sub> = ${toN4(gb.bending.sfnDetail.invAlphaD)} &nbsp;|&nbsp;
+              invα<sub>Fe</sub> = ${toN4(gb.bending.sfnDetail.invAlphaFe)}
+            </span></td></tr>
+
+          <tr>
+            <td>③ 齿根剪切</td>
+            <td style="font-family:var(--font-mono)">τ<sub>Fmax</sub> = ${gb.shear.tau_Fmax_MPa} ≤ [${gb.shear.allowable_MPa}] MPa</td>
+            <td style="font-family:var(--font-mono)">S<sub>τ</sub> = ${gb.shear.safetyFactor}</td>
+            <td><span class="status-badge ${statusClass(gb.shear.status)}">${gb.shear.status}</span></td></tr>
+
+          <tr style="background:#fafbfc;font-size:0.78rem">
+            <td></td>
+            <td colspan="3"><span style="color:var(--text-light)">
+              d<sub>h</sub> = ${gb.shear.dh_mm} mm &nbsp;|&nbsp;
+              τ<sub>tn</sub> = ${gb.shear.tau_tn_MPa} MPa &nbsp;|&nbsp;
+              α<sub>tn</sub> = ${gb.shear.alpha_tn} &nbsp;|&nbsp;
+              [τ<sub>F</sub>] = [σ<sub>F</sub>]/2 = ${gb.shear.allowable_MPa} MPa
+            </span></td></tr>
+
+          <tr>
+            <td>④ 耐磨 10⁶循环</td>
+            <td style="font-family:var(--font-mono)">σ<sub>H</sub> = ${gb.wear.sigma_H_MPa} ≤ [σ<sub>H1</sub>] = ${gb.wear.wear10e6.allowable_H1_MPa} MPa (表4)</td>
+            <td style="font-family:var(--font-mono)">${toN4(gb.wear.wear10e6.allowable_H1_MPa / gb.contact._sigma_H)}</td>
+            <td><span class="status-badge ${statusClass(gb.wear.wear10e6.status)}">${gb.wear.wear10e6.status}</span></td></tr>
+
+          <tr>
+            <td>⑤ 长期无磨损</td>
+            <td style="font-family:var(--font-mono)">σ<sub>H</sub> = ${gb.wear.sigma_H_MPa} ≤ 0.032×${gb.wear.wearLongTerm.HB} = ${gb.wear.wearLongTerm.allowable_H2_MPa} MPa (表5)</td>
+            <td style="font-family:var(--font-mono)">m = ${toN4(gb.wear.wearLongTerm.allowable_H2_MPa / gb.contact._sigma_H)}</td>
+            <td><span class="status-badge ${gb.wear.wearLongTerm.isWearFree ? 'status-qualified' : 'status-warning'}">${gb.wear.wearLongTerm.status}</span></td></tr>
+
+          <tr>
+            <td>⑥ 弯扭合成</td>
+            <td style="font-family:var(--font-mono)">σ<sub>v</sub> = √(3×τ<sub>tn</sub>²) = ${gb.combined.sigma_v_MPa} ≤ [${gb.combined.allowable_MPa}] MPa</td>
+            <td style="font-family:var(--font-mono)">${gb.combined.safetyFactor}</td>
+            <td><span class="status-badge ${statusClass(gb.combined.status)}">${gb.combined.status}</span></td></tr>
+
+        </table>
+        ${!gb.wear.wearLongTerm.isWearFree ? `
+        <div class="alert alert-warning" style="margin-top:8px">
+          ⚠️ σ<sub>H</sub> = ${gb.wear.sigma_H_MPa} > [σ<sub>H2</sub>] = ${gb.wear.wearLongTerm.allowable_H2_MPa} MPa（0.032×HB），长期工作可能发生微动磨损。
+        </div>` : ''}
+        ${gb.wear.wear10e6.status === '合格' ? `
+        <div class="alert alert-info" style="margin-top:4px">
+          ✅ 10⁶循环内齿面无显著磨损（σ<sub>H</sub> ≤ [σ<sub>H1</sub>] = ${gb.wear.wear10e6.allowable_H1_MPa} MPa 表4）
+        </div>` : ''}`;
+
+    } else {
+      // ===== 原有简化公式展示 =====
+      html += `
         <div style="font-size:0.75rem;color:var(--text-light);margin-bottom:8px">${s.torqueSource}</div>
         <table class="param-table">
           <tr><th style="width:18%">校核项目</th><th style="width:32%">应力/值</th><th style="width:18%">安全系数</th><th style="width:32%">判定</th></tr>
@@ -290,7 +503,10 @@ function renderSplineResults(r) {
         ${s.wearFree.isWearFree ? '' : `
         <div class="alert alert-warning" style="margin-top:8px">
           ⚠️ 接触应力超过无磨损门槛值，长期工作可能发生微动磨损。建议改善润滑条件或选用更高硬度材料。
-        </div>`}
+        </div>`}`;
+    }
+
+    html += `
       </div>
     </div>`;
   }

@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no, viewport-fit=cover">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="description" content="电机机械结构校核工具集 — 渐开线花键·平键·过盈配合·轴承·屏蔽套">
 <title>电机机械结构校核工具集</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -131,6 +134,29 @@
               🛡️ 强度校核参数 <span style="font-weight:400;color:var(--text-light);font-size:0.75rem">— 可选，不填则跳过校核</span>
             </div>
 
+            <!-- 计算方法选择 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">计算方法</label>
+                <select id="input-method" class="form-select">
+                  <option value="gb17855">GB/T 17855-1999（推荐）</option>
+                  <option value="simplified">《机械设计手册》简化公式</option>
+                </select>
+              </div>
+              <div class="form-group gb17855-only" id="appType-group">
+                <label class="form-label">应用工况</label>
+                <select id="input-appType" class="form-select">
+                  <option value="gasTurbine_propeller" selected>
+                    🚀 燃气轮机→螺旋桨（轻微冲击）
+                  </option>
+                  <option value="motor_pump">⚡ 电动机→泵/压缩机（平稳）</option>
+                  <option value="motor_gearbox">⚙️ 电动机→齿轮箱（中等冲击）</option>
+                  <option value="engine_driveline">🏎️ 发动机→传动轴（中等冲击）</option>
+                  <option value="motor_generator">🔌 电动机→发电机（平稳）</option>
+                </select>
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">花键材料</label>
               <select id="input-material" class="form-select" onchange="toggleCustomMaterial('input-material','custom-spline')">
@@ -221,18 +247,31 @@
             ↺ 重置
           </button>
 
-          <!-- 快捷示例 -->
+          <!-- 快捷示例：GB/T 3478.1-2008 附录 C -->
           <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-            <span style="font-size:0.75rem;color:var(--text-light)">快速示例:</span>
-            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('motor')">
-                电机轴花键
+            <span style="font-size:0.75rem;color:var(--text-light)">几何示例 (GB/T 3478.1-2008 附录C):</span>
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('c1')" title="内花键 平齿根 5级 H">
+                C.1 INT 5H
               </button>
-              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('small')">
-                小模数
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('c2')" title="内花键 圆齿根 7级 H">
+                C.2 INT 7H
               </button>
-              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('large')">
-                大模数
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('c3')" title="外花键 圆齿根 4级 h">
+                C.3 EXT 4h
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('c4')" title="外花键 圆齿根 6级 e">
+                C.4 EXT 6e
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="loadSplineExample('c5')" title="外花键 平齿根 5级 js">
+                C.5 EXT 5js
+              </button>
+            </div>
+            <span style="font-size:0.75rem;color:var(--text-light);display:block;margin-top:10px">强度示例 (GB/T 17855-1999):</span>
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-accent" onclick="loadSplineExample('gb17855')"
+                      title="INT/EXT 44Z×2m×30R×5H/5h, P=1500kW, n=1250rpm">
+                🔬 例1: 燃气轮机→螺旋桨
               </button>
             </div>
           </div>
@@ -1452,6 +1491,14 @@ window.addEventListener('DOMContentLoaded', () => {
   populateBearingModels('deepGrooveBall');
   // 初始化屏蔽套面板
   updateSleeveTotalThickness();
+  // 计算方法切换 → 显示/隐藏工况选择
+  var methodSel = document.getElementById('input-method');
+  if (methodSel) {
+    methodSel.addEventListener('change', function() {
+      var appGroup = document.getElementById('appType-group');
+      if (appGroup) appGroup.style.display = (this.value === 'gb17855') ? '' : 'none';
+    });
+  }
   // 默认显示花键标签，自动计算一次默认示例
   calcSpline();
 });

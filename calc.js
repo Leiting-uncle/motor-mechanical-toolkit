@@ -877,6 +877,428 @@ function evaluateCheck(actual, allowable, safetyQualified, safetyWarning) {
 }
 
 // ============================================================
+// 九-B、GB/T 17855-1999 花键承载能力计算
+//    依据：GB/T 17855-1999《花键承载能力计算方法》
+// ============================================================
+
+/**
+ * 从功率和转速计算传递转矩（精确系数 9549）
+ * GB/T 17855-1999 公式(1)
+ * T = 9549 × P / n
+ *
+ * @param {number} power_kW - 传递功率 (kW)
+ * @param {number} speed_rpm - 转速 (rpm)
+ * @returns {number} 转矩 (N·m)
+ */
+function calcTorqueFromPowerGB(power_kW, speed_rpm) {
+  if (speed_rpm <= 0 || power_kW <= 0) return 0;
+  return 9549 * power_kW / speed_rpm;
+}
+
+/**
+ * 计算名义切向力 F_t
+ * GB/T 17855-1999 公式(2)
+ * F_t = 2000·T / D
+ *
+ * @param {number} T - 传递转矩 (N·m)
+ * @param {number} D - 分度圆直径 (mm)
+ * @returns {number} 名义切向力 (N)
+ */
+function calcNominalTangentialForce(T, D) {
+  return 2000 * T / D;
+}
+
+/**
+ * 计算单位载荷 W
+ * GB/T 17855-1999 公式(3)
+ * W = F_t / (z·l·cos α_D)
+ *
+ * @param {number} Ft - 名义切向力 (N)
+ * @param {number} z - 齿数
+ * @param {number} l - 配合长度 (mm)
+ * @param {number} alphaD_deg - 压力角 (°)，标准值30°
+ * @returns {number} 单位载荷 (N/mm)
+ */
+function calcUnitLoad(Ft, z, l, alphaD_deg) {
+  var cosAlphaD = Math.cos(alphaD_deg * Math.PI / 180);
+  return Ft / (z * l * cosAlphaD);
+}
+
+/**
+ * 计算齿面接触（挤压）应力 σ_H
+ * GB/T 17855-1999 公式(4)
+ * σ_H = W / h_w
+ *
+ * @param {number} W - 单位载荷 (N/mm)
+ * @param {number} h_w - 工作齿高 (mm)
+ * @returns {number} 齿面压应力 (MPa)
+ */
+function calcContactStressGB17855(W, h_w) {
+  return W / h_w;
+}
+
+/**
+ * 计算齿根弦齿厚 S_Fn（渐开线几何精确法）
+ * GB/T 17855-1999 公式(5)
+ *
+ * S_Fn = D_Fe × sin{ [S/D + invα_D - inv(arccos(D·cosα_D/D_Fe))] }
+ *       (式中角度项为弧度，sin 内部消去 rad→deg→rad 转换)
+ *
+ * 中间变量：
+ *   S_basic — 基本齿厚 (mm) = πm/2
+ *   D — 分度圆直径 (mm)
+ *   α_D — 压力角 (°)
+ *   D_Fe — 渐开线起始圆直径 (mm)
+ *
+ * @param {number} D - 分度圆直径 (mm)
+ * @param {number} D_Fe - 渐开线起始圆直径 (mm)
+ * @param {number} S_basic - 基本齿厚 (mm)
+ * @param {number} alphaD_deg - 压力角 (°)
+ * @returns {object} { S_Fn, D_Fe, S_basic, invAlphaD, invAlphaFe, term_S_D, term_inv, bracket_rad }
+ */
+function calcToothRootChordThickness(D, D_Fe, S_basic, alphaD_deg) {
+  var alphaD_rad = alphaD_deg * Math.PI / 180;
+  var cosAlphaD = Math.cos(alphaD_rad);
+
+  // inv(α_D) = tan(α_D) - α_D
+  var invAlphaD = Math.tan(alphaD_rad) - alphaD_rad;
+
+  // S / D
+  var term_S_D = S_basic / D;
+
+  // arccos(D·cosα_D / D_Fe)
+  var insideAcos = D * cosAlphaD / D_Fe;
+  // 边界保护：D_Fe 可能略小于 D_b，导致 insideAcos > 1
+  if (insideAcos >= 1.0) { insideAcos = 0.9999999999; }
+  if (insideAcos <= -1.0) { insideAcos = -0.9999999999; }
+
+  var alphaFe_rad = Math.acos(insideAcos);
+  var invAlphaFe = Math.tan(alphaFe_rad) - alphaFe_rad;
+
+  // 方括号内总和 (rad)
+  var bracket_rad = term_S_D + invAlphaD - invAlphaFe;
+
+  // S_Fn = D_Fe × sin(bracket_rad)  — rad→deg→rad 在 sin 内抵消
+  var S_Fn = D_Fe * Math.sin(bracket_rad);
+
+  return {
+    S_Fn: S_Fn,
+    _S_Fn: S_Fn,
+    D_Fe: D_Fe,
+    S_basic: S_basic,
+    term_S_D: term_S_D,
+    invAlphaD: invAlphaD,
+    alphaFe_rad: alphaFe_rad,
+    alphaFe_deg: alphaFe_rad * 180 / Math.PI,
+    invAlphaFe: invAlphaFe,
+    bracket_rad: bracket_rad,
+    insideAcos: insideAcos,
+    cosAlphaD: cosAlphaD
+  };
+}
+
+/**
+ * 计算齿根弯曲应力 σ_F
+ * GB/T 17855-1999 公式(6)
+ * σ_F = 6·h·W·cos α_D / S_Fn²
+ *
+ * @param {number} h - 全齿高 (mm)
+ * @param {number} W - 单位载荷 (N/mm)
+ * @param {number} alphaD_deg - 压力角 (°)
+ * @param {number} S_Fn - 齿根弦齿厚 (mm)
+ * @returns {number} 齿根弯曲应力 (MPa)
+ */
+function calcBendingStressGB17855(h, W, alphaD_deg, S_Fn) {
+  var cosAlphaD = Math.cos(alphaD_deg * Math.PI / 180);
+  return 6 * h * W * cosAlphaD / (S_Fn * S_Fn);
+}
+
+/**
+ * 计算当量应力圆直径 d_h
+ * GB/T 17855-1999 公式(8)
+ * d_h = D_ie + K × D_ie × (D_ee - D_ie) / D_ee
+ *
+ * K = 0.15（花键标准值）
+ *
+ * @param {number} D_ie - 外花键小径 (mm)
+ * @param {number} D_ee - 外花键大径 (mm)
+ * @param {number} K - 系数（默认0.15）
+ * @returns {number} 当量直径 (mm)
+ */
+function calcEquivalentDiameterDh(D_ie, D_ee, K) {
+  if (K === undefined) K = 0.15;
+  return D_ie + K * D_ie * (D_ee - D_ie) / D_ee;
+}
+
+/**
+ * 计算名义剪切应力 τ_tn
+ * GB/T 17855-1999 公式(7)
+ * τ_tn = 16000·T / (π·d_h³)
+ *
+ * @param {number} T - 传递转矩 (N·m)
+ * @param {number} dh - 当量直径 (mm)
+ * @returns {number} 名义剪切应力 (MPa)
+ */
+function calcNominalShearStressTauTn(T, dh) {
+  return 16000 * T / (Math.PI * dh * dh * dh);
+}
+
+/**
+ * 计算齿根应力集中系数 α_tn
+ * GB/T 17855-1999 公式(9)
+ *
+ * α_tn = (D_ie/d_h) × {
+ *   1 + 0.17×(h/ρ)×[1 + 3.94/(0.1 + h/ρ)]
+ *   + 6.38×(1 + 0.1×h/ρ) / [2.38 + D_ie/(2h)×(h/ρ + 0.04)^(1/3)]²
+ * }
+ *
+ * @param {number} D_ie - 外花键小径 (mm)
+ * @param {number} dh - 当量直径 (mm)
+ * @param {number} h - 全齿高 (mm)
+ * @param {number} rho - 齿根圆角半径 (mm)
+ * @returns {object} { alpha_tn, term1, term2, ratio, inner }
+ */
+function calcStressConcentrationFactor(D_ie, dh, h, rho) {
+  var ratio = h / rho; // h/ρ
+
+  // 第一项
+  var bracket1 = 1 + 3.94 / (0.1 + ratio);
+  var term1 = 1 + 0.17 * ratio * bracket1;
+
+  // 第二项
+  var inner = 2.38 + (D_ie / (2 * h)) * Math.pow(ratio + 0.04, 1.0 / 3.0);
+  var term2 = 6.38 * (1 + 0.1 * ratio) / (inner * inner);
+
+  var alpha_tn = (D_ie / dh) * (term1 + term2);
+
+  return {
+    alpha_tn: alpha_tn,
+    _alpha_tn: alpha_tn,
+    ratio: ratio,
+    term1: term1,
+    term2: term2,
+    inner: inner,
+    D_ie: D_ie,
+    dh: dh,
+    h: h,
+    rho: rho
+  };
+}
+
+/**
+ * 计算许用应力 [σ]
+ * GB/T 17855-1999 公式(10)
+ * [σ] = σ_ref / (S × K1 × K2 × K3 × K4)
+ *
+ * @param {number} sigmaRef - 材料参考强度 (MPa)，σ_0.2(接触)/σ_b(弯曲)
+ * @param {number} S - 安全系数 S_H 或 S_F
+ * @param {number} K1 - 使用系数
+ * @param {number} K2 - 齿侧间隙系数
+ * @param {number} K3 - 载荷分布系数
+ * @param {number} K4 - 轴向偏斜系数
+ * @returns {number} 许用应力 (MPa)
+ */
+function calcAllowableStressGB(sigmaRef, S, K1, K2, K3, K4) {
+  return sigmaRef / (S * K1 * K2 * K3 * K4);
+}
+
+/**
+ * 计算弯扭合成当量应力 σ_v
+ * GB/T 17855-1999 公式(13)
+ * σ_v = √(σ_Fn² + 3·τ_tn²)
+ *
+ * 当 M_b = 0 时，σ_Fn = 0，σ_v = √(3)·τ_tn
+ *
+ * @param {number} sigmaFn - 弯曲正应力 (MPa)，无弯矩时为0
+ * @param {number} tauTn - 名义剪切应力 (MPa)
+ * @returns {number} 当量应力 (MPa)
+ */
+function calcCombinedStressGB17855(sigmaFn, tauTn) {
+  return Math.sqrt(sigmaFn * sigmaFn + 3 * tauTn * tauTn);
+}
+
+/**
+ * GB/T 17855-1999 完整承载能力计算
+ *
+ * 返回完整的中间计算步骤和校核结果，供界面展示和人工逐行验算
+ *
+ * @param {object} params
+ * @param {number} params.m - 模数 (mm)
+ * @param {number} params.z - 齿数
+ * @param {number} params.D - 分度圆直径 (mm)
+ * @param {number} params.S_basic - 基本齿厚 (mm)
+ * @param {number} params.D_ee - 外花键大径 (mm)
+ * @param {number} params.D_ie - 外花键小径 (mm)
+ * @param {number} params.D_Fe - 渐开线起始圆直径 (mm)
+ * @param {number} params.L_eng - 配合长度 (mm)
+ * @param {number} params.h_w - 工作齿高 (mm)
+ * @param {number} params.h - 全齿高 (mm)
+ * @param {number} params.rho - 齿根圆角半径 (mm)
+ * @param {number} params.torque - 传递转矩 (N·m)
+ * @param {number} params.sigma02 - 屈服强度 σ_0.2 (MPa)
+ * @param {number} params.sigmaB - 抗拉强度 σ_b (MPa)
+ * @param {number} params.HB - 布氏硬度
+ * @param {object} params.appFactors - 工况系数 {K1, K2, K3, K4, S_H, S_F}
+ * @param {string} params.wearGrade - 磨损等级键值（查表4）
+ * @param {number} params.bendingMoment - 轴上弯矩 (N·m)，默认0
+ * @returns {object} 完整计算结果
+ */
+function calcGB17855All(params) {
+  var p = params;
+  var alphaD_deg = 30; // GB/T 3478.1 标准压力角
+
+  // 默认工况系数
+  var af = p.appFactors || { K1: 1.25, K2: 1.1, K3: 1.1, K4: 1.5, S_H: 1.25, S_F: 1.0 };
+
+  // ===== a) 载荷计算 =====
+  var Ft = calcNominalTangentialForce(p.torque, p.D);      // 名义切向力 (N)
+  var W = calcUnitLoad(Ft, p.z, p.L_eng, alphaD_deg);      // 单位载荷 (N/mm)
+
+  // ===== b) 齿面接触强度 =====
+  var sigma_H = calcContactStressGB17855(W, p.h_w);        // 齿面压应力 (MPa)
+  var allowable_H = calcAllowableStressGB(p.sigma02, af.S_H, af.K1, af.K2, af.K3, af.K4);
+  var contactOK = sigma_H <= allowable_H;
+
+  // ===== c) 齿根弯曲强度 =====
+  var sfnResult = calcToothRootChordThickness(p.D, p.D_Fe, p.S_basic, alphaD_deg);
+  var S_Fn = sfnResult.S_Fn;
+  var sigma_F = calcBendingStressGB17855(p.h, W, alphaD_deg, S_Fn);
+  var allowable_F = calcAllowableStressGB(p.sigmaB, af.S_F, af.K1, af.K2, af.K3, af.K4);
+  var bendingOK = sigma_F <= allowable_F;
+
+  // ===== d) 齿根剪切强度 =====
+  var dh = calcEquivalentDiameterDh(p.D_ie, p.D_ee);
+  var tau_tn = calcNominalShearStressTauTn(p.torque, dh);
+  var alphaTnResult = calcStressConcentrationFactor(p.D_ie, dh, p.h, p.rho);
+  var tau_Fmax = tau_tn * alphaTnResult.alpha_tn;
+  var allowable_tau = allowable_F / 2;                     // [τ_F] = [σ_F] / 2
+  var shearOK = tau_Fmax <= allowable_tau;
+
+  // ===== e) 齿面耐磨能力 =====
+  // 1) 10^6 循环
+  var allowable_H1 = lookupWearAllowable10e6(p.wearGrade || 'alloySteel_quenched');
+  var wear10e6OK = sigma_H <= allowable_H1;
+
+  // 2) 长期工作无磨损
+  var allowable_H2 = calcWearAllowableLongTerm(p.HB || 293);
+  var wearLongTermOK = sigma_H <= allowable_H2;
+
+  // ===== f) 外花键扭转与弯曲合成 =====
+  var sigma_v, allowable_v;
+  var bendingMoment = p.bendingMoment || 0;
+  var sigmaFn = 0;
+
+  if (bendingMoment > 0) {
+    // 弯曲正应力 σ_Fn = 32000·M / (π·D_ie³)
+    var W_b = Math.PI * Math.pow(p.D_ie, 3) / 32;
+    sigmaFn = (bendingMoment * 1000) / W_b;
+  }
+  sigma_v = calcCombinedStressGB17855(sigmaFn, tau_tn);
+  allowable_v = calcAllowableStressGB(p.sigma02, af.S_F, af.K1, af.K2, af.K3, af.K4);
+  var combinedOK = sigma_v <= allowable_v;
+
+  // ===== 汇总 =====
+  return {
+    input: {
+      D: p.D, z: p.z, L_eng: p.L_eng,
+      h_w: p.h_w, h: p.h, rho: p.rho,
+      D_ee: p.D_ee, D_ie: p.D_ie, D_Fe: p.D_Fe,
+      torque: p.torque, sigma02: p.sigma02, sigmaB: p.sigmaB, HB: p.HB,
+      appFactors: af
+    },
+
+    // a) 载荷
+    loads: {
+      Ft_N: toSignificantDigits(Ft),
+      _Ft: Ft,
+      W_N_per_mm: toSignificantDigits(W),
+      _W: W,
+      formula_Ft: 'F_t = 2000·T/D',
+      formula_W: 'W = F_t/(z·l·cos α_D)'
+    },
+
+    // b) 接触
+    contact: {
+      sigma_H_MPa: toSignificantDigits(sigma_H),
+      _sigma_H: sigma_H,
+      allowable_MPa: toSignificantDigits(allowable_H),
+      _allowable: allowable_H,
+      safetyFactor: toSignificantDigits(allowable_H / sigma_H),
+      status: contactOK ? '合格' : '不合格',
+      formula_sigmaH: 'σ_H = W/h_w',
+      formula_allowable: '[σ_H] = σ_0.2/(S_H·K1·K2·K3·K4)'
+    },
+
+    // c) 弯曲
+    bending: {
+      sigma_F_MPa: toSignificantDigits(sigma_F),
+      _sigma_F: sigma_F,
+      allowable_MPa: toSignificantDigits(allowable_F),
+      _allowable: allowable_F,
+      safetyFactor: toSignificantDigits(allowable_F / sigma_F),
+      status: bendingOK ? '合格' : '不合格',
+      formula_sigmaF: 'σ_F = 6·h·W·cos α_D/S_Fn²',
+      formula_allowable: '[σ_F] = σ_b/(S_F·K1·K2·K3·K4)',
+      S_Fn_mm: toSignificantDigits(S_Fn),
+      _S_Fn: S_Fn,
+      sfnDetail: sfnResult
+    },
+
+    // d) 剪切
+    shear: {
+      tau_Fmax_MPa: toSignificantDigits(tau_Fmax),
+      _tau_Fmax: tau_Fmax,
+      tau_tn_MPa: toSignificantDigits(tau_tn),
+      _tau_tn: tau_tn,
+      allowable_MPa: toSignificantDigits(allowable_tau),
+      _allowable: allowable_tau,
+      safetyFactor: toSignificantDigits(allowable_tau / tau_Fmax),
+      status: shearOK ? '合格' : '不合格',
+      formula_tauFmax: 'τ_Fmax = τ_tn·α_tn',
+      formula_tauTn: 'τ_tn = 16000T/(π·d_h³)',
+      dh_mm: toSignificantDigits(dh),
+      _dh: dh,
+      alpha_tn: toSignificantDigits(alphaTnResult.alpha_tn),
+      alphaTnDetail: alphaTnResult
+    },
+
+    // e) 耐磨
+    wear: {
+      sigma_H_MPa: toSignificantDigits(sigma_H),
+      // 10^6 循环
+      wear10e6: {
+        allowable_H1_MPa: allowable_H1,
+        status: wear10e6OK ? '合格' : '不合格',
+        condition: 'σ_H ≤ [σ_H1] (表4)'
+      },
+      // 长期无磨损
+      wearLongTerm: {
+        allowable_H2_MPa: toSignificantDigits(allowable_H2),
+        _allowable_H2: allowable_H2,
+        status: wearLongTermOK ? '无磨损 ✓' : '可能磨损 ⚠',
+        isWearFree: wearLongTermOK,
+        formula: '[σ_H2] = 0.032 × HB (表5)',
+        HB: p.HB || 293
+      }
+    },
+
+    // f) 扭转与弯曲合成
+    combined: {
+      sigma_v_MPa: toSignificantDigits(sigma_v),
+      _sigma_v: sigma_v,
+      sigmaFn_MPa: toSignificantDigits(sigmaFn),
+      tau_tn_MPa: toSignificantDigits(tau_tn),
+      allowable_MPa: toSignificantDigits(allowable_v),
+      _allowable: allowable_v,
+      safetyFactor: toSignificantDigits(allowable_v / sigma_v),
+      status: combinedOK ? '合格' : '不合格',
+      formula: 'σ_v = √(σ_Fn² + 3τ_tn²)',
+      bendingMoment_Nm: bendingMoment
+    }
+  };
+}
+
+// ============================================================
 // 十、大径小径公差
 // ============================================================
 
@@ -1455,6 +1877,19 @@ if (typeof module !== 'undefined' && module.exports) {
     checkShaftBending,
     evaluateCheck,
     calcDiameterTolerance,
-    calcAll
+    calcAll,
+    // GB/T 17855-1999
+    calcTorqueFromPowerGB,
+    calcNominalTangentialForce,
+    calcUnitLoad,
+    calcContactStressGB17855,
+    calcToothRootChordThickness,
+    calcBendingStressGB17855,
+    calcEquivalentDiameterDh,
+    calcNominalShearStressTauTn,
+    calcStressConcentrationFactor,
+    calcAllowableStressGB,
+    calcCombinedStressGB17855,
+    calcGB17855All
   };
 }

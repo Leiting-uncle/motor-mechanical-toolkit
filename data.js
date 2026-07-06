@@ -533,7 +533,106 @@ const MATERIAL_PROPERTIES = {
 };
 
 // ============================================================
-// 十二、导出（ES Module 兼容浏览器）
+// 十二、GB/T 17855-1999 花键承载能力计算 — 系数与许用值
+// ============================================================
+
+/**
+ * GB/T 17855-1999 应用工况系数表
+ * K1 — 使用系数（表1），K2 — 齿侧间隙系数（表2）
+ * K3 — 载荷分布系数（表3），K4 — 轴向偏斜系数（表4）
+ * S_H — 齿面接触强度安全系数，S_F — 齿根弯曲强度安全系数
+ */
+var GB17855_APP_TYPES = {
+  /** 电动机 → 泵/压缩机（平稳） */
+  motor_pump: {
+    name: '电动机→泵/压缩机（平稳）',
+    K1: 1.0, K2: 1.1, K3: 1.1, K4: 1.2,
+    S_H: 1.25, S_F: 1.0
+  },
+  /** 电动机 → 齿轮箱（中等冲击） */
+  motor_gearbox: {
+    name: '电动机→齿轮箱（中等冲击）',
+    K1: 1.25, K2: 1.1, K3: 1.2, K4: 1.3,
+    S_H: 1.25, S_F: 1.0
+  },
+  /** 燃气轮机 → 螺旋桨（轻微冲击） — GB/T 17855-1999 例1 */
+  gasTurbine_propeller: {
+    name: '燃气轮机→螺旋桨（轻微冲击）',
+    K1: 1.25, K2: 1.1, K3: 1.1, K4: 1.5,
+    S_H: 1.25, S_F: 1.0
+  },
+  /** 发动机 → 传动轴（中等冲击） */
+  engine_driveline: {
+    name: '发动机→传动轴（中等冲击）',
+    K1: 1.5, K2: 1.2, K3: 1.3, K4: 1.5,
+    S_H: 1.25, S_F: 1.0
+  },
+  /** 电动机 → 发电机（平稳） */
+  motor_generator: {
+    name: '电动机→发电机（平稳）',
+    K1: 1.0, K2: 1.0, K3: 1.0, K4: 1.0,
+    S_H: 1.25, S_F: 1.0
+  }
+};
+
+/**
+ * GB/T 17855-1999 表4 — 10^6 循环齿面磨损许用压应力 [σ_H1] (MPa)
+ * 按材料/热处理状态查取
+ */
+var GB17855_WEAR_TABLE4 = {
+  /** 优质合金钢，调质/表面淬火，HB 280~350 */
+  alloySteel_quenched: {
+    name: '优质合金钢 调质/表面淬火 HB280-350',
+    sigma_H1_MPa: 110
+  },
+  /** 渗碳淬火钢，HRC 58~62 */
+  caseHardened: {
+    name: '渗碳淬火钢 HRC58-62',
+    sigma_H1_MPa: 185
+  },
+  /** 氮化钢，HV 900~1100 */
+  nitrided: {
+    name: '氮化钢 HV900-1100',
+    sigma_H1_MPa: 150
+  },
+  /** 普通碳钢/低合金钢，调质 HB 200~280 */
+  carbonSteel_quenched: {
+    name: '碳钢/低合金钢 调质 HB200-280',
+    sigma_H1_MPa: 80
+  }
+};
+
+/**
+ * GB/T 17855-1999 表5 — 长期工作无磨损许用压应力系数
+ * [σ_H2] = coeff × HB (MPa)
+ * 其中 coeff 为磨损系数
+ */
+var GB17855_WEAR_TABLE5 = {
+  coeff: 0.032,       // 标准磨损系数
+  note: '[σ_H2] = 0.032 × HB (MPa)'
+};
+
+/**
+ * 根据硬度查取 10^6 循环许用压应力
+ * @param {string} wearGrade - 磨损等级键值
+ * @returns {number} [σ_H1] (MPa)
+ */
+function lookupWearAllowable10e6(wearGrade) {
+  var entry = GB17855_WEAR_TABLE4[wearGrade];
+  return entry ? entry.sigma_H1_MPa : 110;
+}
+
+/**
+ * 计算长期无磨损许用压应力
+ * @param {number} HB - 布氏硬度值
+ * @returns {number} [σ_H2] (MPa)
+ */
+function calcWearAllowableLongTerm(HB) {
+  return GB17855_WEAR_TABLE5.coeff * HB;
+}
+
+// ============================================================
+// 十三、导出（ES Module 兼容浏览器）
 // ============================================================
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -553,7 +652,12 @@ if (typeof module !== 'undefined' && module.exports) {
     IT_MULTIPLIERS,
     getRecommendedPinDiameter,
     SAFETY_STANDARDS,
-    MATERIAL_PROPERTIES
+    MATERIAL_PROPERTIES,
+    GB17855_APP_TYPES,
+    GB17855_WEAR_TABLE4,
+    GB17855_WEAR_TABLE5,
+    lookupWearAllowable10e6,
+    calcWearAllowableLongTerm
   };
 }
 // 浏览器环境通过全局变量暴露
