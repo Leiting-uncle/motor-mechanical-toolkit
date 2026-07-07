@@ -64,9 +64,16 @@ function loadSplineExample(type) {
     // 设置计算方法为 GB/T 17855-1999
     var methodSel = document.getElementById('input-method');
     if (methodSel) methodSel.value = 'gb17855';
-    // 设置工况类型
+    // 设置工况类型 + 同步 K1-K4 系数
     var appSel = document.getElementById('input-appType');
     if (appSel) appSel.value = 'gasTurbine_propeller';
+    // 确保 gb17855 面板可见
+    var appGroup = document.getElementById('appType-group');
+    if (appGroup) appGroup.style.display = '';
+    var coeffGroup = document.getElementById('coeff-group');
+    if (coeffGroup) coeffGroup.style.display = '';
+    // 同步系数
+    if (typeof syncCoeffFromAppType === 'function') syncCoeffFromAppType();
 
     updatePinSuggestion();
     calcSpline();
@@ -184,7 +191,7 @@ function calcSpline() {
       var gb_S_basic = result.basic.基本齿厚_S;
       var gb_D_ee = result.external.大径_D_ee.basic;
       var gb_D_ie = result.external.小径_D_ie.basic;
-      var gb_D_Fe = parseFloat(result.external.渐开线起始圆_D_Fe_min);
+      var gb_D_Fe = parseFloat(result.external.渐开线起始圆_D_Fe_max);
       var gb_L_eng = result.tolerance.配合长度_L_mm;
 
       // 工作齿高 h_w ≈ m（标准基本齿廓 ha*=0.5）
@@ -210,12 +217,26 @@ function calcSpline() {
         gb_HB = 280; // 默认
       }
 
-      // 工况系数
+      // 工况系数 — 优先读取自定义输入值，否则使用预设
       var appEl = document.getElementById('input-appType');
       var appKey = appEl ? appEl.value : 'gasTurbine_propeller';
-      var appFactors = GB17855_APP_TYPES[appKey] || GB17855_APP_TYPES['gasTurbine_propeller'];
+      var presetFactors = GB17855_APP_TYPES[appKey] || GB17855_APP_TYPES['gasTurbine_propeller'];
+      // 允许用户通过 coeff- 输入框覆盖预设值
+      function readCoeff(id, fallback) {
+        var el = document.getElementById(id);
+        return (el && el.value !== '') ? parseFloat(el.value) : fallback;
+      }
+      var appFactors = {
+        name: presetFactors.name,
+        K1: readCoeff('coeff-K1', presetFactors.K1),
+        K2: readCoeff('coeff-K2', presetFactors.K2),
+        K3: readCoeff('coeff-K3', presetFactors.K3),
+        K4: readCoeff('coeff-K4', presetFactors.K4),
+        S_H: readCoeff('coeff-SH', presetFactors.S_H),
+        S_F: readCoeff('coeff-SF', presetFactors.S_F)
+      };
 
-      // 磨损等级
+      // 磨损等级 — 按材料硬度和热处理状态
       var wearGrade = (gb_sigma02 >= 835) ? 'alloySteel_quenched' : 'carbonSteel_quenched';
 
       var gbResult = calcGB17855All({
@@ -302,7 +323,7 @@ function renderSplineResults(r) {
       <table class="param-table">
         <tr><td>大径 D<sub>ee</sub></td><td>${fmtDia(ext.大径_D_ee.basic, ext.大径_D_ee.标注)}</td></tr>
         <tr><td>小径 D<sub>ie</sub></td><td>${fmtDia(ext.小径_D_ie.basic, ext.小径_D_ie.标注)}</td></tr>
-        <tr><td>渐开线起始圆 D<sub>Fe min</sub></td><td>φ${ext.渐开线起始圆_D_Fe_min} mm</td></tr>
+        <tr><td>渐开线起始圆 D<sub>Fe max</sub></td><td>φ${ext.渐开线起始圆_D_Fe_max} mm</td></tr>
         <tr><td>齿厚 S</td><td>${fmtRange(ext.齿厚.actual_max, ext.齿厚.actual_min)} (es<sub>v</sub>=${ext.齿厚.es_v_um}μm, T=${ext.齿厚.tolerance_T}mm)</td></tr>
         <tr><td>跨棒距 M<sub>Re</sub></td>
           <td>D<sub>R</sub>=${ext.跨棒距_M_Re.pinDiameter} → ${ext.跨棒距_M_Re.max} / ${ext.跨棒距_M_Re.min}</td></tr>
@@ -322,7 +343,7 @@ function renderSplineResults(r) {
       <table class="param-table">
         <tr><td>大径 D<sub>ei</sub></td><td>${fmtDia(int.大径_D_ei.basic, int.大径_D_ei.标注)}</td></tr>
         <tr><td>小径 D<sub>ii</sub></td><td>${fmtDia(int.小径_D_ii.basic, int.小径_D_ii.标注)}</td></tr>
-        <tr><td>渐开线终止圆 D<sub>Fi max</sub></td><td>φ${int.渐开线终止圆_D_Fi_max} mm</td></tr>
+        <tr><td>渐开线终止圆 D<sub>Fi min</sub></td><td>φ${int.渐开线终止圆_D_Fi_min} mm</td></tr>
         <tr><td>齿槽宽 E</td><td>${fmtRange(int.齿槽宽.actual_max, int.齿槽宽.actual_min)} (EI=0, T=${int.齿槽宽.tolerance_T}mm)</td></tr>
         <tr><td>棒间距 M<sub>Ri</sub></td>
           <td>D<sub>R</sub>=${int.棒间距_M_Ri.pinDiameter} → ${int.棒间距_M_Ri.min} / ${int.棒间距_M_Ri.max}</td></tr>

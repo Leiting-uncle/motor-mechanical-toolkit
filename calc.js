@@ -144,35 +144,46 @@ function calcExternalSplineDiameters(m, z, rootType, profile) {
 }
 
 /**
- * 计算外花键渐开线起始圆直径最小值 D_Fe_min
- * 依据：GB/T 3478.1-2008 第6.4节
+ * 计算外花键渐开线起始圆直径最大值 D_Fe_max
+ * 依据：GB/T 3478.1-2008 第6.4节 公式(6)
  *
- * D_Fe_min 取决于配对内花键大径 D_ei 与间隙
- * 简化公式：D_Fe_min = max(D_ie + 0.2m, 配对计算值)
+ * D_Fe_max 由配对内花键齿顶圆在啮合线上限定，
+ * 确保渐开线啮合不产生干涉。
+ *
+ * D_Fe_max = 2 × √[ (0.5·D_b)² + ( 0.5·D·sinα_D − (h_s − 0.5·es_v/tanα_D)/sinα_D )² ]
+ *
+ * 其中：
+ *   h_s = 0.6m — 配对内花键齿顶高
+ *   es_v — 作用齿厚上偏差 (μm)
  *
  * @param {number} m - 模数
  * @param {number} z - 齿数
- * @param {number} D_ie - 外花键小径
- * @param {number} D_ei_mate - 配对内花键大径
- * @returns {number} 渐开线起始圆直径最小值
+ * @param {number} D - 分度圆直径 (mm)
+ * @param {number} Db - 基圆直径 (mm)
+ * @param {number} alphaD_deg - 压力角 (°)，默认30
+ * @param {number} es_v_um - 作用齿厚上偏差 (μm)，默认0
+ * @returns {number} 渐开线起始圆直径最大值
  */
-function calcExternalFormDiameter(m, z, D_ie, D_ei_mate) {
-  // 方案1：基于配对内花键大径
-  // D_Fe_min = 2 × √[(0.5D_b)² + (0.5D_ei·sin(α_D) - (D_ei-D)/2 / sin(α_D))²]
-  // 实际由配对内花键齿顶在啮合线上限定
-  // 简化计算：
-  const D = m * z;
-  const D_Fe_from_mate = Math.sqrt(
-    Math.pow(D_ei_mate, 2) - Math.pow(D_ei_mate * 0.05, 2)
-  );
-  // 保守取较大值
-  const c_F = 0.1 * m;  // 齿形裕度
-  const D_Fe_min = Math.max(
-    D_ie + 2 * c_F,
-    m * (z - 1)  // 近似：分度圆以下1个模数
-  );
+function calcExternalFormDiameter(m, z, D, Db, alphaD_deg, es_v_um) {
+  if (es_v_um === undefined) es_v_um = 0;
+  var alphaD_rad = alphaD_deg * Math.PI / 180;
+  var h_s = 0.6 * m;  // 配对内花键齿顶高 (mm)
 
-  return toSignificantDigits(Math.max(D_Fe_min, D_ie + 0.1));
+  // 0.5·D_b
+  var halfDb = 0.5 * Db;
+  // 0.5·D·sinα_D - (h_s - 0.5·es_v/tanα_D)/sinα_D
+  var es_v_mm = es_v_um / 1000;
+  var innerTerm = 0.5 * D * Math.sin(alphaD_rad)
+    - (h_s - 0.5 * es_v_mm / Math.tan(alphaD_rad)) / Math.sin(alphaD_rad);
+
+  var D_Fe_max = 2 * Math.sqrt(halfDb * halfDb + innerTerm * innerTerm);
+
+  // 保守约束：不低于 D_ie + 2c_F（保证齿根完整）
+  var D_ie = m * (z - 1.8);  // 圆齿根保守值
+  var c_F = 0.1 * m;
+  D_Fe_max = Math.max(D_Fe_max, D_ie + 2 * c_F);
+
+  return toSignificantDigits(D_Fe_max);
 }
 
 // ============================================================
@@ -186,9 +197,10 @@ function calcExternalFormDiameter(m, z, D_ie, D_ei_mate) {
  * @param {number} z - 齿数
  * @param {string} rootType - 齿根形式: 'flatRoot' | 'filletRoot'
  * @param {object} profile - 基本齿廓参数
+ * @param {number} D_Fe_max - 外花键渐开线起始圆直径最大值 mm（用于约束 D_ii）
  * @returns {object} 内花键直径参数
  */
-function calcInternalSplineDiameters(m, z, rootType, profile) {
+function calcInternalSplineDiameters(m, z, rootType, profile, D_Fe_max) {
   const rootData = profile[rootType];
   const addCoeff = profile.addendumCoeff;
   const majorCoeff = rootData.internalMajorCoeff;
@@ -199,14 +211,21 @@ function calcInternalSplineDiameters(m, z, rootType, profile) {
   const D_ei_basic = m * (z + majorCoeff);
 
   // 内花键小径（齿顶圆基本值）
-  // D_ii = m(z - 2·ha*) = m(z - 1)   (ha*=0.5)
-  const D_ii_basic = m * (z - 2 * addCoeff);
+  // 理论值：D_ii = m(z - 2·ha*) = m(z - 1)
+  // 约束：D_ii ≥ D_Fe_max + 2·c_F（确保与外花键渐开线起始圆有足够间隙）
+  const c_F = 0.1 * m;
+  const D_ii_theory = m * (z - 2 * addCoeff);
+  let D_ii_basic = D_ii_theory;
+  if (D_Fe_max !== undefined && D_Fe_max > 0) {
+    D_ii_basic = Math.max(D_ii_theory, D_Fe_max + 2 * c_F);
+  }
 
   return {
     D_ei_basic: toSignificantDigits(D_ei_basic),
     D_ii_basic: toSignificantDigits(D_ii_basic),
     _D_ei_basic: D_ei_basic,
-    _D_ii_basic: D_ii_basic
+    _D_ii_basic: D_ii_basic,
+    _D_ii_theory: D_ii_theory  // 保留理论值用于参考
   };
 }
 
@@ -214,19 +233,18 @@ function calcInternalSplineDiameters(m, z, rootType, profile) {
  * 计算内花键渐开线终止圆直径最小值 D_Fi_min
  * 依据：GB/T 3478.1-2008 第6.4节
  *
+ * D_Fi_min = m(z + 1) + 2·c_F
+ *
+ * 其中 c_F = 0.1m — 齿形裕度
+ *
  * @param {number} m - 模数
  * @param {number} z - 齿数
- * @param {number} D_ei - 内花键大径
- * @param {number} D_ee_mate - 配对外花键大径
  * @returns {number} 渐开线终止圆直径最小值
  */
-function calcInternalFormDiameter(m, z, D_ei, D_ee_mate) {
-  const c_F = 0.1 * m;  // 齿形裕度
-  const D_Fi_max = D_ei - 2 * c_F;
-  // 保守取较小值
-  const D_Fi_from_mate = m * (z + 1);
-
-  return toSignificantDigits(Math.min(D_Fi_max, D_ei - 0.1));
+function calcInternalFormDiameter(m, z) {
+  const c_F = 0.1 * m;
+  const D_Fi_min = m * (z + 1) + 2 * c_F;
+  return toSignificantDigits(D_Fi_min);
 }
 
 // ============================================================
@@ -1180,7 +1198,7 @@ function calcGB17855All(params) {
   var wear10e6OK = sigma_H <= allowable_H1;
 
   // 2) 长期工作无磨损
-  var allowable_H2 = calcWearAllowableLongTerm(p.HB || 293);
+  var allowable_H2 = calcWearAllowableLongTerm(p.HB || 293, 'quenched_tempered');
   var wearLongTermOK = sigma_H <= allowable_H2;
 
   // ===== f) 外花键扭转与弯曲合成 =====
@@ -1390,19 +1408,11 @@ function calcAll(params) {
   // ============ Step 2: 外花键几何 ============
   const extDia = calcExternalSplineDiameters(m, z, rootType, profile);
 
-  // ============ Step 3: 内花键几何 ============
-  const intDia = calcInternalSplineDiameters(m, z, rootType, profile);
-
-  // ============ Step 4: 渐开线起始/终止圆 ============
-  // D_Fe_min 取决于内花键大径
-  const D_Fe_min = calcExternalFormDiameter(m, z, extDia._D_ie_basic, intDia._D_ei_basic);
-  const D_Fi_max = calcInternalFormDiameter(m, z, intDia._D_ei_basic, extDia._D_ee_basic);
-
-  // ============ Step 5: 配合长度 ============
+  // ============ Step 3: 配合长度 ============
   // 若未指定，默认取 1×D
   const L_eng = engagementLength > 0 ? engagementLength : D;
 
-  // ============ Step 6: 公差计算 ============
+  // ============ Step 4: 公差计算（需在 D_Fe 之前，es_v 为 D_Fe 计算输入）============
   const totalTol = calcTotalTolerance(D, S_basic, toleranceGrade, gradeData);  // μm
   const compTol = calcComprehensiveTolerance(m, z, D, L_eng, gradeData);
   const lambda = compTol.lambda;        // μm
@@ -1413,8 +1423,17 @@ function calcAll(params) {
   const ff = compTol.ff;
   const Fbeta = compTol.Fbeta;
 
-  // ============ Step 7: 基本偏差 ============
+  // ============ Step 5: 基本偏差（需在 D_Fe 之前）============
   const es_v = calcFundamentalDeviation(D, fitType, totalTol);
+
+  // ============ Step 6: 渐开线起始/终止圆 ============
+  // D_Fe_max 取决于配对内花键参数与 es_v
+  // GB/T 3478.1-2008 第6.4节 公式(6)
+  var D_Fe_max = calcExternalFormDiameter(m, z, D, Db, basicGeo.alphaDeg, es_v);
+  var D_Fi_min = calcInternalFormDiameter(m, z);
+
+  // ============ Step 7: 内花键几何（D_ii 受 D_Fe_max 约束）============
+  const intDia = calcInternalSplineDiameters(m, z, rootType, profile, D_Fe_max);
 
   // ============ Step 8: 外花键齿厚极限 ============
   const extTooth = calcToothThicknessLimits(S_basic, es_v, lambda, totalTol);
@@ -1484,7 +1503,7 @@ function calcAll(params) {
     var extMajorIT = getITgradeFromTable([
       { mMax: 0.75, IT: 10 }, { mMax: 2.0, IT: 11 }, { mMax: 6.0, IT: 11 }, { mMax: 10, IT: 12 }
     ], m);
-    extMajorTol_um = Math.round(calcDiameterTolerance(extDia._D_ee_basic, extMajorIT) * 1000);
+    extMajorTol_um = lookupITTolerance(extDia._D_ee_basic, extMajorIT);
   }
   var extMajorUpperDev_mm = extMajorUpperDev_um / 1000;
   var extMajorTol_mm = extMajorTol_um / 1000;
@@ -1512,9 +1531,10 @@ function calcAll(params) {
   var D_ie_max = extDia._D_ie_basic + extMinorUpperDev_mm;
   var D_ie_min = D_ie_max - extMinorTol_mm;
 
-  // ---- 内花键大径 D_ei (H偏差，下偏差=0，IT公式回退) ----
+  // ---- 内花键大径 D_ei (H偏差，下偏差=0，IT标准公差直接查表) ----
   var intMajorIT = getITgradeFromTable(INT_MAJOR_TOL_GRADE, m);
-  var intMajorTol_mm = calcDiameterTolerance(intDia._D_ei_basic, intMajorIT);
+  var intMajorTol_um = lookupITTolerance(intDia._D_ei_basic, intMajorIT);
+  var intMajorTol_mm = intMajorTol_um / 1000;
   var D_ei_max = intDia._D_ei_basic + intMajorTol_mm;
   var D_ei_min = intDia._D_ei_basic;
 
@@ -1522,11 +1542,11 @@ function calcAll(params) {
   // 上偏差：表25直接查表
   var intMinorTol_um = lookupTable25Tolerance(intDia._D_ii_basic, m);
   if (intMinorTol_um === null || intMinorTol_um === undefined) {
-    // 表25无覆盖，回退到 IT 公式
+    // 表25无覆盖，回退到 IT 标准公差直接查表
     var intMinorIT = getITgradeFromTable([
       { mMax: 0.75, IT: 10 }, { mMax: 2.0, IT: 11 }, { mMax: 6.0, IT: 11 }, { mMax: 10, IT: 12 }
     ], m);
-    intMinorTol_um = Math.round(calcDiameterTolerance(intDia._D_ii_basic, intMinorIT) * 1000);
+    intMinorTol_um = lookupITTolerance(intDia._D_ii_basic, intMinorIT);
   }
   var intMinorTol_mm = intMinorTol_um / 1000;
   var D_ii_max = intDia._D_ii_basic + intMinorTol_mm;
@@ -1745,7 +1765,7 @@ function calcAll(params) {
         上偏差_um: extMinorUpperDev_um,
         标注: `${extDia.D_ie_basic} ${extMinorUpperDev_um >= 0 ? '+' : ''}${extMinorUpperDev_um.toFixed(0)}μm / ${(extMinorUpperDev_um - extMinorTol_um).toFixed(0)}μm (表25)`
       },
-      渐开线起始圆_D_Fe_min: toSignificantDigits(D_Fe_min),
+      渐开线起始圆_D_Fe_max: toSignificantDigits(D_Fe_max),
       齿厚: {
         basic: extTooth.S_basic,
         actual_max: extTooth.S_max,
@@ -1783,7 +1803,7 @@ function calcAll(params) {
         tolerance: toSignificantDigits(intMinorTol_mm),
         标注: `${intDia.D_ii_basic} +${intMinorTol_um.toFixed(0)}μm/0 (表25)`
       },
-      渐开线终止圆_D_Fi_max: toSignificantDigits(D_Fi_max),
+      渐开线终止圆_D_Fi_min: toSignificantDigits(D_Fi_min),
       齿槽宽: {
         basic: intSpace.E_basic,
         actual_max: intSpace.E_max,

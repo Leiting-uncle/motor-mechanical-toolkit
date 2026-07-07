@@ -157,6 +157,24 @@
               </div>
             </div>
 
+            <!-- GB/T 17855-1999 工况系数（高级） -->
+            <div class="gb17855-only" id="coeff-group" style="border:1px dashed var(--border);padding:10px 12px;border-radius:6px;margin-bottom:12px;background:#fafbfc">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer" onclick="var p=document.getElementById('coeff-body');p.style.display=p.style.display==='none'?'':'none'">
+                <span style="font-weight:600;font-size:0.82rem">📐 工况系数 K₁~K₄（点击展开/折叠）</span>
+                <span style="font-size:0.72rem;color:var(--text-light)">自动填入 · 可手动修改</span>
+              </div>
+              <div id="coeff-body" style="display:none">
+                <div class="form-row" style="grid-template-columns:repeat(3,1fr)">
+                  <div class="form-group"><label class="form-label">K₁ 使用系数</label><input type="number" id="coeff-K1" class="form-input" value="1.25" min="0.5" max="3.0" step="0.05"></div>
+                  <div class="form-group"><label class="form-label">K₂ 齿侧间隙系数</label><input type="number" id="coeff-K2" class="form-input" value="1.1" min="0.5" max="3.0" step="0.05"></div>
+                  <div class="form-group"><label class="form-label">K₃ 载荷分布系数</label><input type="number" id="coeff-K3" class="form-input" value="1.1" min="0.5" max="3.0" step="0.05"></div>
+                  <div class="form-group"><label class="form-label">K₄ 轴向偏斜系数</label><input type="number" id="coeff-K4" class="form-input" value="1.5" min="0.5" max="6.0" step="0.05"></div>
+                  <div class="form-group"><label class="form-label">S_H 接触安全系数</label><input type="number" id="coeff-SH" class="form-input" value="1.25" min="1.0" max="3.0" step="0.05"></div>
+                  <div class="form-group"><label class="form-label">S_F 弯曲安全系数</label><input type="number" id="coeff-SF" class="form-input" value="1.0" min="1.0" max="3.0" step="0.05"></div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">花键材料</label>
               <select id="input-material" class="form-select" onchange="toggleCustomMaterial('input-material','custom-spline')">
@@ -1496,12 +1514,41 @@ window.addEventListener('DOMContentLoaded', () => {
   if (methodSel) {
     methodSel.addEventListener('change', function() {
       var appGroup = document.getElementById('appType-group');
+      var coeffGroup = document.getElementById('coeff-group');
       if (appGroup) appGroup.style.display = (this.value === 'gb17855') ? '' : 'none';
+      if (coeffGroup) coeffGroup.style.display = (this.value === 'gb17855') ? '' : 'none';
     });
+    // 初始状态：gb17855 默认选中
+    var appGroupInit = document.getElementById('appType-group');
+    var coeffGroupInit = document.getElementById('coeff-group');
+    if (appGroupInit) appGroupInit.style.display = '';
+    if (coeffGroupInit) coeffGroupInit.style.display = '';
+  }
+  // 工况类型切换 → 自动填入 K1~K4 推荐值
+  var appTypeSel = document.getElementById('input-appType');
+  if (appTypeSel) {
+    appTypeSel.addEventListener('change', syncCoeffFromAppType);
   }
   // 默认显示花键标签，自动计算一次默认示例
   calcSpline();
 });
+
+// 从工况类型同步 K1~K4 系数到输入框
+function syncCoeffFromAppType() {
+  var appType = document.getElementById('input-appType').value;
+  var appFactors = (typeof GB17855_APP_TYPES !== 'undefined')
+    ? GB17855_APP_TYPES[appType]
+    : null;
+  if (!appFactors) return;
+  ['K1','K2','K3','K4'].forEach(function(k) {
+    var el = document.getElementById('coeff-' + k);
+    if (el) el.value = appFactors[k];
+  });
+  var elSH = document.getElementById('coeff-SH');
+  if (elSH) elSH.value = appFactors.S_H;
+  var elSF = document.getElementById('coeff-SF');
+  if (elSF) elSF.value = appFactors.S_F;
+}
 </script>
 
 </body>

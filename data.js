@@ -39,7 +39,7 @@ const BASIC_PROFILE_30 = {
     // 圆齿根具有较大圆角半径，齿根更深
     // D_ie = m(z - 1.8), D_ei = m(z + 1.8)
     bottomClearanceCoeff: 0.40,           // 有效顶隙系数 c* (由标准表反推)
-    rootFilletCoeff: 0.30,                // 齿根圆角半径系数 ρ_f* (GB/T 3478.1 表1)
+    rootFilletCoeff: 0.40,                // 齿根圆角半径系数 ρ_f* = 0.4m (GB/T 3478.1 表1)
     externalMinorCoeff: 1.80,             // 外花键小径：D_ie = m(z - 1.8)
     internalMajorCoeff: 1.80,             // 内花键大径：D_ei = m(z + 1.8)
   }
@@ -377,6 +377,40 @@ const INT_MAJOR_TOL_GRADE = [
 ];
 
 /**
+ * IT 标准公差数值表 (μm)
+ * 数据来源：GB/T 1800.4-2009 标准公差数值
+ * 用于非表25覆盖直径（如 D_ei）的公差直接查表
+ *
+ * 结构：按公称尺寸段 (mm) × IT等级
+ */
+const IT_TOLERANCE_TABLE = {
+  sizeRanges: [3, 6, 10, 18, 30, 50, 80, 120, 180, 250, 315, 400, 500],
+  values: {
+    12: [100, 120, 150, 180, 210, 250, 300, 350, 400, 460, 520, 570, 630],
+    13: [140, 180, 220, 270, 330, 390, 460, 540, 630, 720, 810, 890, 970],
+    14: [250, 300, 360, 430, 520, 620, 740, 870, 1000, 1150, 1300, 1400, 1550]
+  }
+};
+
+/**
+ * 从 IT_TOLERANCE_TABLE 直接查取公差值 (μm)
+ * @param {number} diameter - 基本直径 (mm)
+ * @param {number} ITgrade - IT 等级 (12/13/14)
+ * @returns {number} 公差值 (μm)
+ */
+function lookupITTolerance(diameter, ITgrade) {
+  var ranges = IT_TOLERANCE_TABLE.sizeRanges;
+  var vals = IT_TOLERANCE_TABLE.values[ITgrade];
+  if (!vals) return 400; // 默认 IT14
+
+  for (var i = 0; i < ranges.length; i++) {
+    if (diameter <= ranges[i]) return vals[i];
+  }
+  // D > 500mm：按最后一个值线性外推
+  return Math.round(vals[vals.length - 1] * (diameter / ranges[ranges.length - 1]));
+}
+
+/**
  * 根据模数 m 从分段表中获取 IT 等级
  */
 function getITgradeFromTable(table, m) {
@@ -577,58 +611,88 @@ var GB17855_APP_TYPES = {
 
 /**
  * GB/T 17855-1999 表4 — 10^6 循环齿面磨损许用压应力 [σ_H1] (MPa)
- * 按材料/热处理状态查取
+ * 按材料硬度（HRC）查取
  */
 var GB17855_WEAR_TABLE4 = {
-  /** 优质合金钢，调质/表面淬火，HB 280~350 */
-  alloySteel_quenched: {
-    name: '优质合金钢 调质/表面淬火 HB280-350',
-    sigma_H1_MPa: 110
-  },
-  /** 渗碳淬火钢，HRC 58~62 */
-  caseHardened: {
-    name: '渗碳淬火钢 HRC58-62',
-    sigma_H1_MPa: 185
-  },
-  /** 氮化钢，HV 900~1100 */
-  nitrided: {
-    name: '氮化钢 HV900-1100',
-    sigma_H1_MPa: 150
-  },
-  /** 普通碳钢/低合金钢，调质 HB 200~280 */
-  carbonSteel_quenched: {
-    name: '碳钢/低合金钢 调质 HB200-280',
-    sigma_H1_MPa: 80
+  // HRC → [σ_H1] MPa 映射
+  hrcValues: [
+    { hrc: 20, sigma_H1_MPa: 95 },
+    { hrc: 28, sigma_H1_MPa: 110 },
+    { hrc: 40, sigma_H1_MPa: 135 },
+    { hrc: 45, sigma_H1_MPa: 170 },
+    { hrc: 50, sigma_H1_MPa: 185 },
+    { hrc: 60, sigma_H1_MPa: 205 }
+  ],
+  // 按材料热处理类型快捷取值
+  categories: {
+    /** 优质合金钢，调质/表面淬火，HB 280~350 → ≈28HRC */
+    alloySteel_quenched: { name: '优质合金钢 调质/表面淬火 HB280-350', sigma_H1_MPa: 110 },
+    /** 渗碳淬火钢，HRC 58~62 → ≈60HRC */
+    caseHardened: { name: '渗碳淬火钢 HRC58-62', sigma_H1_MPa: 205 },
+    /** 氮化钢，HV 900~1100 → ≈50HRC */
+    nitrided: { name: '氮化钢 HV900-1100', sigma_H1_MPa: 185 },
+    /** 普通碳钢/低合金钢，调质 HB 200~280 → ≈20HRC */
+    carbonSteel_quenched: { name: '碳钢/低合金钢 调质 HB200-280', sigma_H1_MPa: 95 }
   }
 };
 
 /**
- * GB/T 17855-1999 表5 — 长期工作无磨损许用压应力系数
- * [σ_H2] = coeff × HB (MPa)
- * 其中 coeff 为磨损系数
+ * GB/T 17855-1999 表5 — 长期工作无磨损许用压应力 [σ_H2]
+ * 按热处理方式选取计算公式
  */
 var GB17855_WEAR_TABLE5 = {
-  coeff: 0.032,       // 标准磨损系数
-  note: '[σ_H2] = 0.032 × HB (MPa)'
+  /** 未经热处理: [σ_H2] = 0.028 × HB */
+  untreated: { coeff: 0.028, hardnessType: 'HB', formula: '[σ_H2] = 0.028 × HB', name: '未经热处理' },
+  /** 调质处理: [σ_H2] = 0.032 × HB */
+  quenched_tempered: { coeff: 0.032, hardnessType: 'HB', formula: '[σ_H2] = 0.032 × HB', name: '调质处理' },
+  /** 淬火: [σ_H2] = 0.3 × HRC */
+  hardened: { coeff: 0.3, hardnessType: 'HRC', formula: '[σ_H2] = 0.3 × HRC', name: '淬火' },
+  /** 渗碳(氮)淬火: [σ_H2] = 0.4 × HRC */
+  case_hardened: { coeff: 0.4, hardnessType: 'HRC', formula: '[σ_H2] = 0.4 × HRC', name: '渗碳(氮)淬火' }
 };
 
 /**
- * 根据硬度查取 10^6 循环许用压应力
- * @param {string} wearGrade - 磨损等级键值
+ * 根据材料类别查取 10^6 循环许用压应力
+ * @param {string} wearGrade - 磨损等级键值（categories）
  * @returns {number} [σ_H1] (MPa)
  */
 function lookupWearAllowable10e6(wearGrade) {
-  var entry = GB17855_WEAR_TABLE4[wearGrade];
-  return entry ? entry.sigma_H1_MPa : 110;
+  var cat = GB17855_WEAR_TABLE4.categories[wearGrade];
+  return cat ? cat.sigma_H1_MPa : 110;
 }
 
 /**
- * 计算长期无磨损许用压应力
- * @param {number} HB - 布氏硬度值
+ * 根据 HRC 硬度插值查取 10^6 循环许用压应力
+ * @param {number} hrc - 洛氏硬度 HRC
+ * @returns {number} [σ_H1] (MPa)
+ */
+function lookupWearAllowable10e6ByHRC(hrc) {
+  var vals = GB17855_WEAR_TABLE4.hrcValues;
+  if (hrc <= vals[0].hrc) return vals[0].sigma_H1_MPa;
+  for (var i = 0; i < vals.length - 1; i++) {
+    if (hrc <= vals[i + 1].hrc) {
+      // 线性插值
+      var t = (hrc - vals[i].hrc) / (vals[i + 1].hrc - vals[i].hrc);
+      return vals[i].sigma_H1_MPa + t * (vals[i + 1].sigma_H1_MPa - vals[i].sigma_H1_MPa);
+    }
+  }
+  return vals[vals.length - 1].sigma_H1_MPa;
+}
+
+/**
+ * 计算长期无磨损许用压应力 [σ_H2]
+ * 按热处理方式选取对应的计算公式
+ *
+ * @param {number} hardness - 硬度值
+ * @param {string} heatTreat - 热处理方式键值
+ *   'untreated' | 'quenched_tempered' | 'hardened' | 'case_hardened'
  * @returns {number} [σ_H2] (MPa)
  */
-function calcWearAllowableLongTerm(HB) {
-  return GB17855_WEAR_TABLE5.coeff * HB;
+function calcWearAllowableLongTerm(hardness, heatTreat) {
+  if (!heatTreat) heatTreat = 'quenched_tempered';
+  var entry = GB17855_WEAR_TABLE5[heatTreat];
+  if (!entry) entry = GB17855_WEAR_TABLE5['quenched_tempered'];
+  return entry.coeff * hardness;
 }
 
 // ============================================================
@@ -648,6 +712,8 @@ if (typeof module !== 'undefined' && module.exports) {
     TABLE25,
     lookupTable25Tolerance,
     INT_MAJOR_TOL_GRADE,
+    IT_TOLERANCE_TABLE,
+    lookupITTolerance,
     getITgradeFromTable,
     IT_MULTIPLIERS,
     getRecommendedPinDiameter,
@@ -657,6 +723,7 @@ if (typeof module !== 'undefined' && module.exports) {
     GB17855_WEAR_TABLE4,
     GB17855_WEAR_TABLE5,
     lookupWearAllowable10e6,
+    lookupWearAllowable10e6ByHRC,
     calcWearAllowableLongTerm
   };
 }
