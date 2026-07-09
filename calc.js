@@ -1413,9 +1413,10 @@ function calcAll(params) {
   const L_eng = engagementLength > 0 ? engagementLength : D;
 
   // ============ Step 4: 公差计算（需在 D_Fe 之前，es_v 为 D_Fe 计算输入）============
-  const totalTol = calcTotalTolerance(D, S_basic, toleranceGrade, gradeData);  // μm
+  // T+λ 和 λ 四舍五入取整数 (μm)，后续计算均使用取整后的值
+  const totalTol = Math.round(calcTotalTolerance(D, S_basic, toleranceGrade, gradeData));  // μm
   const compTol = calcComprehensiveTolerance(m, z, D, L_eng, gradeData);
-  const lambda = compTol.lambda;        // μm
+  const lambda = Math.round(compTol.lambda);        // μm
   const T = totalTol - lambda;          // 加工公差 (μm)
 
   // 单项公差明细
@@ -1744,7 +1745,8 @@ function calcAll(params) {
       基本齿厚_S: basicGeo.S_basic,
       基本齿槽宽_E: basicGeo.E_basic,
       压力角_alpha: basicGeo.alphaDeg,
-      inv_alpha: toSignificantDigits(invAlpha)
+      inv_alpha: toSignificantDigits(invAlpha),
+      齿根圆角最小曲率半径_mm: toSignificantDigits(profile[rootType].rootFilletCoeff * m)
     },
 
     // ---- 外花键 ----
@@ -1864,7 +1866,558 @@ function calcAll(params) {
 }
 
 // ============================================================
-// 十二、导出
+// 十二、计算报告生成
+//    生成详细的分步计算过程，每步含公式 → 代入 → 结果
+//    供界面展示"中间计算详情"和导出计算报告（PDF/打印）
+// ============================================================
+
+/**
+ * 格式化数值，保留指定位小数（默认4位），去除尾部多余零
+ * @param {number} v - 数值
+ * @param {number} decimals - 小数位数（默认4）
+ * @returns {string}
+ */
+function fmtVal(v, decimals) {
+  if (decimals === undefined) decimals = 4;
+  if (typeof v !== 'number' || isNaN(v)) return String(v);
+  return parseFloat(v.toFixed(decimals)).toString();
+}
+
+/**
+ * 格式化 μm 值（保留1位小数）
+ */
+function fmtUm(v) {
+  if (typeof v !== 'number' || isNaN(v)) return String(v);
+  return parseFloat(v.toFixed(1)).toString();
+}
+
+/**
+ * 生成计算报告 — 分步详细计算过程
+ *
+ * 每步结构：
+ *   { num, title, symbol, formula, substitution, result, unit, standard }
+ *
+ * @param {object} params - 原始输入参数
+ * @param {object} r - calcAll 的返回结果
+ * @returns {object} { title, steps, metadata }
+ */
+function generateCalcReport(params, r) {
+  var steps = [];
+  var num = 0;
+  function step(title, symbol, formula, substitution, result, unit, standard) {
+    num++;
+    steps.push({
+      num: num, title: title, symbol: symbol || '',
+      formula: formula || '', substitution: substitution || '',
+      result: String(result), unit: unit || '', standard: standard || ''
+    });
+  }
+  function n(v, d) { return fmtVal(v, d); }
+  function u(v) { return fmtUm(v); }
+
+  // 提取数据
+  var m = r.input.m;
+  var z = r.input.z;
+  var D = r.basic.分度圆直径_D;
+  var Db = r.basic.基圆直径_Db;
+  var p_pitch = r.basic.齿距_p;
+  var S_basic = r.basic.基本齿厚_S;
+  var E_basic = r.basic.基本齿槽宽_E;
+  var alphaDeg = r.basic.压力角_alpha;
+  var invAlpha = r.basic.inv_alpha;
+  var rootType = r.input.rootType;
+  // 兼容 key ('filletRoot'/'flatRoot') 和显示名 ('圆齿根'/'平齿根')
+  var isFilletRoot = (rootType === 'filletRoot' || rootType.indexOf('圆') >= 0);
+  var rootTypeName = isFilletRoot ? '圆齿根' : '平齿根';
+  var rootTypeKey = isFilletRoot ? 'filletRoot' : 'flatRoot';
+  var rMinorCoeff = isFilletRoot ? 1.8 : 1.5;
+  var cF = n(0.1 * m, 3);
+
+  var ext = r.external;
+  var int = r.internal;
+  var tol = r.tolerance;
+  var fit = r.fit;
+
+  // ============ 一、已知条件 ============
+  step('模数', 'm', '', '', m, 'mm', 'GB/T 3478.1-2008');
+  step('齿数', 'z', '', '', z, '', 'GB/T 3478.1-2008');
+  step('标准压力角', 'α_D', '', '', alphaDeg + '°', '', 'GB/T 3478.1-2008 §5');
+  step('花键配合长度', 'l', '', '', n(tol.配合长度_L_mm), 'mm', '');
+  step('花键类型', '', '', '', rootTypeName, '', '');
+  step('公差等级', '', '', '', tol.公差等级 + '级 — ' + tol.等级说明, '', 'GB/T 3478.1-2008 §8');
+  step('配合类别', '', '', '', fit.配合类别 + ' — ' + fit.配合性质, '', 'GB/T 3478.1-2008 §7');
+
+  // ============ 二、基本几何参数 ============
+  step('分度圆直径', 'D', 'm × z',
+    n(m) + ' × ' + z, D, 'mm', 'GB/T 3478.1-2008 公式(1)');
+
+  step('基圆直径', 'D_b', 'm × z × cos(α_D)',
+    n(m) + ' × ' + z + ' × cos(' + alphaDeg + '°) = ' + n(m) + ' × ' + z + ' × ' + n(Math.cos(alphaDeg * Math.PI / 180)),
+    Db, 'mm', 'GB/T 3478.1-2008 公式(2)');
+
+  step('齿距', 'p', 'π × m',
+    'π × ' + n(m), p_pitch, 'mm', 'GB/T 3478.1-2008 公式(3)');
+
+  step('基本齿厚', 'S', 'π × m / 2',
+    'π × ' + n(m) + ' / 2', S_basic, 'mm', 'GB/T 3478.1-2008 公式(4)');
+
+  step('基本齿槽宽', 'E', 'π × m / 2',
+    'π × ' + n(m) + ' / 2', E_basic, 'mm', 'GB/T 3478.1-2008 公式(4)');
+
+  step('渐开线函数 inv(α_D)', 'inv(α_D)', 'tan(α_D) − α_D',
+    'tan(' + alphaDeg + '°) − ' + n(alphaDeg * Math.PI / 180) + ' = ' + n(Math.tan(alphaDeg * Math.PI / 180)) + ' − ' + n(alphaDeg * Math.PI / 180),
+    invAlpha, 'rad', 'GB/T 3478.1-2008');
+
+  // ============ 三、外花键直径 ============
+  step('外花键大径基本尺寸', 'D_ee', 'm × (z + 2·ha*)',
+    n(m) + ' × (' + z + ' + 2×0.5) = ' + n(m) + ' × ' + n(z + 1),
+    ext.大径_D_ee.basic, 'mm', 'GB/T 3478.1-2008');
+
+  step('外花键小径基本尺寸', 'D_ie', 'm × (z − coeff)',
+    n(m) + ' × (' + z + ' − ' + n(rMinorCoeff) + ')',
+    ext.小径_D_ie.basic, 'mm', 'GB/T 3478.1-2008');
+
+  // D_Fe_max 详细计算
+  var h_s = n(0.6 * m, 3);
+  var es_v_val = ext.齿厚.es_v_um;
+  step('配对内花键齿顶高', 'h_s', '0.6 × m',
+    '0.6 × ' + n(m), h_s, 'mm', 'GB/T 3478.1-2008 §6.4');
+
+  step('外花键渐开线起始圆直径最大值', 'D_Fe_max',
+    '2√[(0.5D_b)² + (0.5D·sinα_D − (h_s−0.5·es_v/tanα_D)/sinα_D)²]',
+    '2√[(' + n(0.5 * Db) + ')² + (' + n(0.5 * D) + '×sin(' + alphaDeg + '°) − (' + h_s + '−0.5×(' + u(es_v_val) + '/1000)/tan(' + alphaDeg + '°))/sin(' + alphaDeg + '°))²]',
+    ext.渐开线起始圆_D_Fe_max, 'mm', 'GB/T 3478.1-2008 公式(6)');
+
+  // ============ 四、内花键直径 ============
+  step('内花键大径基本尺寸', 'D_ei', 'm × (z + coeff)',
+    n(m) + ' × (' + z + ' + ' + n(rMinorCoeff) + ')',
+    int.大径_D_ei.basic, 'mm', 'GB/T 3478.1-2008');
+
+  step('齿形裕度', 'c_F', '0.1 × m',
+    '0.1 × ' + n(m), cF, 'mm', 'GB/T 3478.1-2008');
+
+  step('内花键小径基本尺寸', 'D_ii', 'max[m(z−2·ha*), D_Fe_max + 2·c_F]',
+    'max[' + n(m) + '×(' + z + '−1), ' + n(ext.渐开线起始圆_D_Fe_max) + ' + 2×' + cF + '] = max[' + n(m * (z - 1)) + ', ' + n(parseFloat(ext.渐开线起始圆_D_Fe_max) + 2 * 0.1 * m) + ']',
+    int.小径_D_ii.basic, 'mm', 'GB/T 3478.1-2008 §6.4');
+
+  step('内花键渐开线终止圆直径最小值', 'D_Fi_min', 'm × (z + 1) + 2·c_F',
+    n(m) + ' × (' + z + ' + 1) + 2×' + cF + ' = ' + n(m * (z + 1)) + ' + ' + n(2 * 0.1 * m),
+    int.渐开线终止圆_D_Fi_min, 'mm', 'GB/T 3478.1-2008 §6.4');
+
+  // ============ 五、公差计算 ============
+  step('公差单位 i*(D)', 'i*', '0.45·∛D + 0.001·D  (D≤500mm)',
+    '0.45×∛' + n(D) + ' + 0.001×' + n(D) + ' = 0.45×' + n(Math.pow(D, 1/3)) + ' + ' + n(0.001 * D),
+    u(0.45 * Math.pow(D, 1/3) + 0.001 * D), 'μm', 'GB/T 3478.1-2008 公式(3)');
+
+  step('公差单位 i**(S)', 'i**', '0.45·∛S + 0.001·S',
+    '0.45×∛' + n(S_basic) + ' + 0.001×' + n(S_basic),
+    u(0.45 * Math.pow(S_basic, 1/3) + 0.001 * S_basic), 'μm', 'GB/T 3478.1-2008 公式(4)');
+
+  step('总公差 (T+λ)', 'T+λ', 'K₁·i* + K₂·i**',
+    '', n(tol.总公差_T_lambda_um, 1), 'μm', 'GB/T 3478.1-2008 表8');
+
+  // 单项公差
+  var L_arc_half = Math.PI * m * z / 2;
+  step('分度圆周长之半', 'L', 'π·m·z / 2',
+    'π × ' + n(m) + ' × ' + z + ' / 2', n(L_arc_half, 2), 'mm', 'GB/T 3478.1-2008 §8.4');
+
+  step('齿距累积公差', 'F_p', 'fpA·√L + fpB',
+    '', n(tol.齿距累积公差_Fp_um, 1), 'μm', 'GB/T 3478.1-2008 §8.4');
+
+  var phi_val = m + 0.0125 * m * z;
+  step('公差因数', 'φ', 'm + 0.0125·m·z',
+    n(m) + ' + 0.0125×' + n(m) + '×' + z, n(phi_val, 2), 'mm', 'GB/T 3478.1-2008 §8.5');
+
+  step('齿形公差', 'f_f', 'ffA·φ + ffB',
+    '', n(tol.齿形公差_ff_um, 1), 'μm', 'GB/T 3478.1-2008 §8.5');
+
+  step('齿向公差', 'F_β', 'fbetaA·√g + fbetaB  (g=配合长度)',
+    '', n(tol.齿向公差_Fbeta_um, 1), 'μm', 'GB/T 3478.1-2008 §8.6');
+
+  step('综合公差', 'λ', '0.6·√(F_p² + f_f² + F_β²)',
+    '0.6×√(' + n(tol.齿距累积公差_Fp_um) + '² + ' + n(tol.齿形公差_ff_um) + '² + ' + n(tol.齿向公差_Fbeta_um) + '²)',
+    n(tol.综合公差_lambda_um, 1), 'μm', 'GB/T 3478.1-2008 §8.4~8.6');
+
+  step('加工公差', 'T', '(T+λ) − λ',
+    n(tol.总公差_T_lambda_um, 1) + ' − ' + n(tol.综合公差_lambda_um, 1),
+    n(tol.加工公差_T_um, 1), 'μm', 'GB/T 3478.1-2008');
+
+  // ============ 六、基本偏差 ============
+  step('作用齿厚上偏差', 'es_v', '按配合类别和D查表24',
+    '配合=' + fit.配合类别 + ', D=' + n(D, 1) + 'mm → 查表',
+    u(es_v_val), 'μm', 'GB/T 3478.1-2008 表24');
+
+  // ============ 七、外花键齿厚极限 ============
+  step('作用齿厚最大值', 'S_v_max', 'S + es_v / 1000',
+    n(S_basic) + ' + (' + u(es_v_val) + ')/1000',
+    n(ext.齿厚.action_max, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  step('实际齿厚最小值', 'S_min', 'S_v_max − (T+λ)/1000',
+    n(ext.齿厚.action_max, 4) + ' − ' + n(tol.总公差_T_lambda_um, 1) + '/1000',
+    n(ext.齿厚.actual_min, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  step('实际齿厚最大值', 'S_max', 'S_v_max − λ/1000',
+    n(ext.齿厚.action_max, 4) + ' − ' + n(tol.综合公差_lambda_um, 1) + '/1000',
+    n(ext.齿厚.actual_max, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  step('作用齿厚最小值', 'S_v_min', 'S_min + λ/1000',
+    n(ext.齿厚.actual_min, 4) + ' + ' + n(tol.综合公差_lambda_um, 1) + '/1000',
+    n(ext.齿厚.action_min, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  // ============ 八、内花键齿槽宽极限 ============
+  step('作用齿槽宽最小值', 'E_v_min', 'E  (EI_v=0)',
+    n(E_basic), n(E_basic), 'mm', 'GB/T 3478.1-2008 §8 (基孔制H)');
+
+  step('实际齿槽宽最小值', 'E_min', 'E + λ/1000  (EI=λ)',
+    n(E_basic) + ' + ' + n(tol.综合公差_lambda_um, 1) + '/1000',
+    n(int.齿槽宽.actual_min, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  step('实际齿槽宽最大值', 'E_max', 'E + (T+λ)/1000  (ES=T+λ)',
+    n(E_basic) + ' + ' + n(tol.总公差_T_lambda_um, 1) + '/1000',
+    n(int.齿槽宽.actual_max, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  step('作用齿槽宽最大值', 'E_v_max', 'E_max − λ/1000',
+    n(int.齿槽宽.actual_max, 4) + ' − ' + n(tol.综合公差_lambda_um, 1) + '/1000',
+    n(int.齿槽宽.action_max, 4), 'mm', 'GB/T 3478.1-2008 §8');
+
+  // ============ 九、配合侧隙 ============
+  step('最小侧隙', 'C_min', 'E_min − S_max',
+    n(int.齿槽宽.actual_min, 4) + ' − ' + n(ext.齿厚.actual_max, 4),
+    n(fit.最小侧隙_mm, 4), 'mm', '');
+  step('最大侧隙', 'C_max', 'E_max − S_min',
+    n(int.齿槽宽.actual_max, 4) + ' − ' + n(ext.齿厚.actual_min, 4),
+    n(fit.最大侧隙_mm, 4), 'mm', '');
+
+  // ============ 十、量棒测量 ============
+  var pinD = ext.跨棒距_M_Re.pinDiameter;
+  if (!ext.跨棒距_M_Re.max_detail.error) {
+    var maxDet = ext.跨棒距_M_Re.max_detail;
+    step('外花键量棒接触点 inv(α_e)', 'inv(α_e)',
+      'S_max/D + inv(α_D) + D_R/D_b − π/z',
+      n(ext.齿厚.actual_max, 4) + '/' + n(D) + ' + ' + n(invAlpha) + ' + ' + n(pinD) + '/' + n(Db) + ' − π/' + z,
+      n(maxDet.invAlpha_e, 6), '', 'GB/T 3478.5-2008');
+
+    step('外花键量棒中心压力角', 'α_e', 'inv⁻¹(inv(α_e))  牛顿迭代',
+      '', maxDet.alpha_e_deg + '°', '', 'GB/T 3478.5-2008');
+
+    var evenOddNote = z % 2 === 0 ? '(偶齿数)' : '×cos(90°/' + z + ') (奇齿数修正)';
+    step('外花键跨棒距最大值', 'M_Re_max', 'D_b/cos(α_e) + D_R  ' + evenOddNote,
+      n(Db) + '/cos(' + maxDet.alpha_e_deg + '°) + ' + n(pinD),
+      n(ext.跨棒距_M_Re.max, 4), 'mm', 'GB/T 3478.5-2008');
+  }
+
+  if (!int.棒间距_M_Ri.max_detail.error) {
+    var minDet = int.棒间距_M_Ri.min_detail;
+    step('内花键量棒接触点 inv(α_i)', 'inv(α_i)',
+      'E_min/D + inv(α_D) − D_R/D_b',
+      n(int.齿槽宽.actual_min, 4) + '/' + n(D) + ' + ' + n(invAlpha) + ' − ' + n(pinD) + '/' + n(Db),
+      n(minDet.invAlpha_i, 6), '', 'GB/T 3478.5-2008');
+
+    step('内花键量棒中心压力角', 'α_i', 'inv⁻¹(inv(α_i))  牛顿迭代',
+      '', minDet.alpha_i_deg + '°', '', 'GB/T 3478.5-2008');
+
+    var evenOddNoteI = z % 2 === 0 ? '(偶齿数)' : '×cos(90°/' + z + ') (奇齿数修正)';
+    step('内花键棒间距最小值', 'M_Ri_min', 'D_b/cos(α_i) − D_R  ' + evenOddNoteI,
+      n(Db) + '/cos(' + minDet.alpha_i_deg + '°) − ' + n(pinD),
+      n(int.棒间距_M_Ri.min, 4), 'mm', 'GB/T 3478.5-2008');
+  }
+
+  // ============ 十一、大径小径公差 ============
+  step('外花键大径上偏差', 'es(D_ee)/tan(α_D)', '查表24',
+    'D=' + n(D, 1) + 'mm, 配合=' + fit.配合类别 + ' → 查表',
+    u(ext.大径_D_ee.上偏差_um), 'μm', 'GB/T 3478.1-2008 表24');
+  step('外花键大径公差', 'T(D_ee)', '查表25',
+    '', n(parseFloat(ext.大径_D_ee.tolerance) * 1000, 0), 'μm', 'GB/T 3478.1-2008 表25');
+  step('内花键小径上偏差', 'ES(D_ii)', '查表25 (H偏差，下偏差=0)',
+    '', u(int.小径_D_ii.标注.indexOf('μm') > -1 ? parseFloat(int.小径_D_ii.标注.replace(/[^+\-\d.]/g, '').split('/')[0]) || 0 : 0), 'μm', 'GB/T 3478.1-2008 表25');
+
+  // ============ 十二、强度校核（如果有） ============
+  if (r.strength) {
+    var s = r.strength;
+    step('传递转矩', 'T', s.torqueSource.indexOf('推算') > -1 ? '9550×P/n' : '直接输入',
+      s.torqueSource, n(s.torque, 1), 'N·m', '');
+
+    // 简化公式校核步骤
+    if (r._method !== 'gb17855' || !r._gb17855) {
+      step('齿面接触应力', 'σ_H', '2000·T / (ψ·z·h_c·l·D_m)',
+        '2000×' + n(s.torque, 1) + ' / (0.75×' + z + '×h_c×' + n(tol.配合长度_L_mm) + '×' + n(D) + ')',
+        n(s.contact.stress_MPa, 2), 'MPa', '《机械设计手册》第五版');
+
+      step('齿面接触许用应力', '[σ_H]', '按材料查表',
+        '材料=' + s.material + ' (' + s.materialHardness + ')',
+        n(s.contact.allowable_MPa, 1), 'MPa', '');
+      step('接触安全系数', 'n_H', '[σ_H] / σ_H',
+        n(s.contact.allowable_MPa, 1) + ' / ' + n(s.contact.stress_MPa, 2),
+        n(s.contact.safetyFactor, 2), '', '');
+
+      step('齿根弯曲应力', 'σ_F', '6000·T·h / (ψ·z·S_fn²·l·D_m)',
+        '', n(s.bending.stress_MPa, 2), 'MPa', '《机械设计手册》第五版');
+      step('齿根弯曲许用应力', '[σ_F]', '按材料查表',
+        '', n(s.bending.allowable_MPa, 1), 'MPa', '');
+
+      step('轴扭转应力', 'τ_max', '16000·T / (π·D_ie_min³)',
+        '16000×' + n(s.torque, 1) + ' / (π×' + n(s.shaftTorsion.D_ie_min) + '³)',
+        n(s.shaftTorsion.stress_MPa, 2), 'MPa', '《机械设计手册》第五版');
+    }
+
+    // ============ GB/T 17855-1999 详细步骤 ============
+    if (r._gb17855) {
+      var gb = r._gb17855;
+      var af = r._appFactors;
+
+      step('======= GB/T 17855-1999 承载能力计算 =======', '', '', '', '', '', '');
+
+      // a) 载荷
+      step('[a] 名义切向力', 'F_t', '2000·T / D',
+        '2000 × ' + n(s.torque, 1) + ' / ' + n(D),
+        n(gb.loads.Ft_N, 1), 'N', 'GB/T 17855-1999 公式(2)');
+
+      step('[a] 单位载荷', 'W', 'F_t / (z·l·cos α_D)',
+        n(gb.loads._Ft, 1) + ' / (' + z + ' × ' + n(gb.input.L_eng) + ' × cos30°) = ' + n(gb.loads._Ft, 1) + ' / (' + z + ' × ' + n(gb.input.L_eng) + ' × ' + n(Math.cos(Math.PI/6)) + ')',
+        n(gb.loads.W_N_per_mm, 1), 'N/mm', 'GB/T 17855-1999 公式(3)');
+
+      // b) 接触
+      step('[b] 齿面压应力', 'σ_H', 'W / h_w',
+        n(gb.loads._W, 1) + ' / ' + n(gb.input.h_w),
+        n(gb.contact.sigma_H_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(4)');
+
+      step('[b] 许用接触应力', '[σ_H]', 'σ_0.2 / (S_H·K1·K2·K3·K4)',
+        n(gb.input.sigma02) + ' / (' + n(af.S_H) + ' × ' + n(af.K1) + ' × ' + n(af.K2) + ' × ' + n(af.K3) + ' × ' + n(af.K4) + ') = ' + n(gb.input.sigma02) + ' / ' + n(af.S_H * af.K1 * af.K2 * af.K3 * af.K4),
+        n(gb.contact.allowable_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(10)');
+
+      step('[b] 接触校核', '', 'σ_H ≤ [σ_H]',
+        n(gb.contact.sigma_H_MPa, 1) + ' ≤ ' + n(gb.contact.allowable_MPa, 1) + ' → ' + gb.contact.status,
+        '', '', '');
+
+      // c) 弯曲
+      step('[c] 渐开线起始圆压力角', 'α_Fe', 'arccos(D·cosα_D / D_Fe)',
+        'arccos(' + n(D) + '×cos30° / ' + n(gb.input.D_Fe) + ') = arccos(' + n(gb.bending.sfnDetail.insideAcos, 6) + ')',
+        n(gb.bending.sfnDetail.alphaFe_deg, 4) + '°', '', 'GB/T 17855-1999 公式(5)');
+
+      step('[c] D_Fe处渐开线函数', 'inv(α_Fe)', 'tan(α_Fe) − α_Fe',
+        'tan(' + n(gb.bending.sfnDetail.alphaFe_deg, 4) + '°) − ' + n(gb.bending.sfnDetail.alphaFe_rad, 6),
+        n(gb.bending.sfnDetail.invAlphaFe, 6), 'rad', '');
+
+      step('[c] 分度圆处渐开线函数', 'inv(α_D)', 'tan(30°) − π/6',
+        n(Math.tan(Math.PI/6)) + ' − ' + n(Math.PI/6, 6),
+        n(gb.bending.sfnDetail.invAlphaD, 6), 'rad', '');
+
+      step('[c] 齿根弦齿厚（方括号内）', '[...]', 'S/D + invα_D − invα_Fe',
+        n(gb.bending.sfnDetail.term_S_D, 6) + ' + ' + n(gb.bending.sfnDetail.invAlphaD, 6) + ' − ' + n(gb.bending.sfnDetail.invAlphaFe, 6),
+        n(gb.bending.sfnDetail.bracket_rad, 6), 'rad', '');
+
+      step('[c] 齿根弦齿厚', 'S_Fn', 'D_Fe × sin([...])',
+        n(gb.input.D_Fe) + ' × sin(' + n(gb.bending.sfnDetail.bracket_rad, 6) + ')',
+        n(gb.bending.S_Fn_mm, 4), 'mm', 'GB/T 17855-1999 公式(5)');
+
+      step('[c] 齿根弯曲应力', 'σ_F', '6·h·W·cosα_D / S_Fn²',
+        '6 × ' + n(gb.input.h) + ' × ' + n(gb.loads._W, 1) + ' × cos30° / ' + n(gb.bending._S_Fn, 4) + '²',
+        n(gb.bending.sigma_F_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(6)');
+
+      step('[c] 许用弯曲应力', '[σ_F]', 'σ_b / (S_F·K1·K2·K3·K4)',
+        n(gb.input.sigmaB) + ' / (' + n(af.S_F) + ' × ' + n(af.K1) + ' × ' + n(af.K2) + ' × ' + n(af.K3) + ' × ' + n(af.K4) + ') = ' + n(gb.input.sigmaB) + ' / ' + n(af.S_F * af.K1 * af.K2 * af.K3 * af.K4),
+        n(gb.bending.allowable_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(10)');
+
+      step('[c] 弯曲校核', '', 'σ_F ≤ [σ_F]',
+        n(gb.bending.sigma_F_MPa, 1) + ' ≤ ' + n(gb.bending.allowable_MPa, 1) + ' → ' + gb.bending.status,
+        '', '', '');
+
+      // d) 剪切
+      step('[d] 当量应力圆直径', 'd_h', 'D_ie + K·D_ie·(D_ee−D_ie)/D_ee',
+        n(gb.input.D_ie) + ' + 0.15×' + n(gb.input.D_ie) + '×(' + n(gb.input.D_ee) + '−' + n(gb.input.D_ie) + ')/' + n(gb.input.D_ee),
+        n(gb.shear.dh_mm, 1), 'mm', 'GB/T 17855-1999 公式(8)');
+
+      step('[d] 名义剪切应力', 'τ_tn', '16000·T / (π·d_h³)',
+        '16000 × ' + n(s.torque, 1) + ' / (π × ' + n(gb.shear._dh, 1) + '³)',
+        n(gb.shear.tau_tn_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(7)');
+
+      step('[d] 应力集中系数（h/ρ）', 'h/ρ', 'h / ρ',
+        n(gb.input.h) + ' / ' + n(gb.input.rho),
+        n(gb.shear.alphaTnDetail.ratio, 2), '', 'GB/T 17855-1999 公式(9)');
+
+      step('[d] 应力集中系数', 'α_tn', '(D_ie/d_h)×{1+0.17(h/ρ)[1+3.94/(0.1+h/ρ)] + 6.38(1+0.1h/ρ)/[2.38+D_ie/(2h)×(h/ρ+0.04)^(1/3)]²}',
+        '', n(gb.shear.alpha_tn, 3), '', 'GB/T 17855-1999 公式(9)');
+
+      step('[d] 最大剪切应力', 'τ_Fmax', 'τ_tn × α_tn',
+        n(gb.shear.tau_tn_MPa, 1) + ' × ' + n(gb.shear.alpha_tn, 3),
+        n(gb.shear.tau_Fmax_MPa, 1), 'MPa', 'GB/T 17855-1999');
+
+      step('[d] 许用剪切应力', '[τ_F]', '[σ_F] / 2',
+        n(gb.bending.allowable_MPa, 1) + ' / 2',
+        n(gb.shear.allowable_MPa, 1), 'MPa', 'GB/T 17855-1999');
+
+      step('[d] 剪切校核', '', 'τ_Fmax ≤ [τ_F]',
+        n(gb.shear.tau_Fmax_MPa, 1) + ' ≤ ' + n(gb.shear.allowable_MPa, 1) + ' → ' + gb.shear.status,
+        '', '', '');
+
+      // e) 耐磨
+      step('[e] 耐磨10⁶循环许用值', '[σ_H1]', '查表4（按材料硬度HRC）',
+        '硬度等级=' + (gb.input.sigma02 >= 835 ? '优质合金钢调质' : '碳钢调质'),
+        n(gb.wear.wear10e6.allowable_H1_MPa, 1), 'MPa', 'GB/T 17855-1999 表4');
+      step('[e] 耐磨10⁶循环校核', '', 'σ_H ≤ [σ_H1]',
+        n(gb.wear.sigma_H_MPa, 1) + ' ≤ ' + n(gb.wear.wear10e6.allowable_H1_MPa, 1) + ' → ' + gb.wear.wear10e6.status,
+        '', '', '');
+
+      var h2formula = gb.wear.wearLongTerm.formula || '[σ_H2] = 0.032×HB';
+      step('[e] 长期无磨损许用值', '[σ_H2]', h2formula,
+        '0.032 × ' + n(gb.wear.wearLongTerm.HB),
+        n(gb.wear.wearLongTerm.allowable_H2_MPa, 1), 'MPa', 'GB/T 17855-1999 表5');
+      step('[e] 长期无磨损校核', '', 'σ_H ≤ [σ_H2]',
+        n(gb.wear.sigma_H_MPa, 1) + ' ≤ ' + n(gb.wear.wearLongTerm.allowable_H2_MPa, 1) + ' → ' + gb.wear.wearLongTerm.status,
+        '', '', '');
+
+      // f) 弯扭合成
+      step('[f] 弯扭合成当量应力', 'σ_v', '√(σ_Fn² + 3×τ_tn²)  [M_b=0时 σ_Fn=0]',
+        '√(3 × ' + n(gb.shear.tau_tn_MPa, 1) + '²) = √3 × ' + n(gb.shear.tau_tn_MPa, 1),
+        n(gb.combined.sigma_v_MPa, 1), 'MPa', 'GB/T 17855-1999 公式(13)');
+
+      step('[f] 弯扭合成许用值', '[σ_v]', 'σ_0.2 / (S_F·K1·K2·K3·K4)',
+        n(gb.input.sigma02) + ' / (' + n(af.S_F) + ' × ' + n(af.K1) + ' × ' + n(af.K2) + ' × ' + n(af.K3) + ' × ' + n(af.K4) + ')',
+        n(gb.combined.allowable_MPa, 1), 'MPa', '');
+
+      step('[f] 弯扭合成校核', '', 'σ_v ≤ [σ_v]',
+        n(gb.combined.sigma_v_MPa, 1) + ' ≤ ' + n(gb.combined.allowable_MPa, 1) + ' → ' + gb.combined.status,
+        '', '', '');
+    }
+  }
+
+  // 齿根圆角半径
+  var profileData = BASIC_PROFILE_30[rootTypeKey];
+  var rho_val = profileData.rootFilletCoeff * m;
+  step('齿根圆角最小曲率半径', 'R_imin/R_emin', 'ρ_f* × m',
+    n(profileData.rootFilletCoeff, 2) + ' × ' + n(m), n(rho_val, 2), 'mm', 'GB/T 3478.1-2008 表1');
+
+  // 跨齿数 + 公法线长度（外花键）
+  var k_across = z / 6.0 + 0.5;
+  var k_ceil = Math.ceil(k_across);
+  step('公法线跨齿数（理论）', "k'", 'z / 6 + 0.5',
+    z + ' / 6 + 0.5', n(k_across, 2), '', 'GB/T 3478.5-2008');
+  step('公法线跨齿数（圆整）', 'k', 'ceil(z/6 + 0.5)',
+    'ceil(' + n(k_across, 2) + ')', String(k_ceil), '', '');
+
+  var cosAlphaD = Math.cos(Math.PI / 6);
+  var W_min = cosAlphaD * ((k_ceil - 0.5) * Math.PI * m + D * (Math.tan(Math.PI/6) - Math.PI/6) + es_v_val/1000 - tol.总公差_T_lambda_um/1000);
+  step('公法线平均长度最小值', 'W_min', 'cosα_D×[(k−0.5)πm + D·invα_D + es_v − (T+λ)]',
+    'cos30°×[(' + k_ceil + '−0.5)×π×' + n(m) + ' + ' + n(D) + '×' + n(invAlpha) + ' + ' + u(es_v_val) + '/1000 − ' + u(tol.总公差_T_lambda_um) + '/1000]',
+    n(W_min, 4), 'mm', 'GB/T 3478.5-2008');
+
+  var W_max_val = W_min + (tol.加工公差_T_um / 1000) * cosAlphaD;
+  step('公法线平均长度最大值', 'W_max', 'W_min + T×cosα_D',
+    n(W_min, 4) + ' + ' + n(tol.加工公差_T_um/1000, 4) + '×' + n(cosAlphaD),
+    n(W_max_val, 4), 'mm', 'GB/T 3478.5-2008');
+
+  return {
+    title: '圆柱直齿渐开线花键 计算说明书',
+    subtitle: 'GB/T 3478.1-2008 圆柱直齿渐开线花键（米制模数 齿侧配合）',
+    inputSummary: '模数 m=' + m + 'mm, 齿数 z=' + z + ', 压力角 α_D=' + alphaDeg + '°, 配合长度 l=' + n(tol.配合长度_L_mm) + 'mm',
+    splineType: rootTypeName + ' (ρ_f*=' + n(isFilletRoot ? 0.4 : 0.2, 1) + 'm)',
+    steps: steps,
+    metadata: {
+      m: m, z: z, alphaDeg: alphaDeg, D: D, Db: Db,
+      toleranceGrade: tol.公差等级, fitType: fit.配合类别,
+      rootType: rootType, engagementLength: tol.配合长度_L_mm,
+      hasStrength: !!r.strength, method: r._method || 'simplified',
+      generatedAt: new Date().toISOString()
+    }
+  };
+}
+
+/**
+ * 将计算报告渲染为可打印的完整 HTML 文档
+ * @param {object} report - generateCalcReport 的返回结果
+ * @returns {string} 完整 HTML 字符串
+ */
+function renderCalcReportToHTML(report) {
+  var stepsHTML = '';
+  for (var i = 0; i < report.steps.length; i++) {
+    var s = report.steps[i];
+
+    // 分隔标题行（如 GB/T 17855 章节标题）
+    if (!s.formula && !s.result && s.title.indexOf('===') === 0) {
+      stepsHTML += '<tr class="section-divider"><td colspan="5"><strong>' +
+        s.title.replace(/=/g, '').trim() + '</strong></td></tr>';
+      continue;
+    }
+
+    var formulaCell = s.formula;
+    if (s.substitution) {
+      formulaCell += '<br><span class="substitution">= ' + s.substitution + '</span>';
+    }
+    var resultCell = s.result + (s.unit ? ' <span class="unit">' + s.unit + '</span>' : '');
+    stepsHTML += '<tr>' +
+      '<td class="num">(' + s.num + ')</td>' +
+      '<td class="title">' + s.title + '</td>' +
+      '<td class="formula">' + formulaCell + '</td>' +
+      '<td class="result">' + resultCell + '</td>' +
+      '<td class="standard">' + (s.standard || '') + '</td>' +
+      '</tr>';
+  }
+
+  var now = new Date();
+  var dateStr = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0') + ' ' +
+    String(now.getHours()).padStart(2, '0') + ':' +
+    String(now.getMinutes()).padStart(2, '0');
+
+  return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n' +
+    '<meta charset="UTF-8">\n' +
+    '<title>花键计算说明书</title>\n' +
+    '<style>\n' +
+    '  @page { size: A4; margin: 15mm 12mm; }\n' +
+    '  * { box-sizing: border-box; margin: 0; padding: 0; }\n' +
+    '  body { font-family: "Microsoft YaHei", "SimSun", sans-serif; font-size: 11pt; ' +
+    '    color: #222; line-height: 1.7; max-width: 210mm; margin: 0 auto; padding: 5mm; }\n' +
+    '  h1 { text-align: center; font-size: 16pt; margin-bottom: 4px; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }\n' +
+    '  .subtitle { text-align: center; font-size: 10pt; color: #555; margin-bottom: 8px; }\n' +
+    '  .info-bar { display: flex; justify-content: space-between; font-size: 9pt; ' +
+    '    background: #f0f4f8; padding: 6px 10px; border-radius: 4px; margin-bottom: 12px; }\n' +
+    '  .section-title { font-size: 12pt; font-weight: bold; color: #1a3a5c; ' +
+    '    border-bottom: 1px solid #ccc; padding-bottom: 2px; margin: 14px 0 6px 0; }\n' +
+    '  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }\n' +
+    '  th { background: #1a3a5c; color: #fff; padding: 5px 6px; text-align: left; font-size: 9pt; }\n' +
+    '  td { padding: 4px 6px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }\n' +
+    '  tr:nth-child(even) { background: #fafbfc; }\n' +
+    '  .num { width: 36px; text-align: center; color: #1a3a5c; font-weight: bold; font-size: 9pt; }\n' +
+    '  .title { width: 170px; font-weight: 600; }\n' +
+    '  .formula { font-family: "Consolas", "Courier New", monospace; font-size: 9pt; }\n' +
+    '  .substitution { color: #555; font-size: 8.5pt; }\n' +
+    '  .result { width: 120px; font-family: "Consolas", "Courier New", monospace; ' +
+    '    font-weight: bold; color: #1a3a5c; font-size: 10pt; text-align: right; }\n' +
+    '  .standard { width: 130px; font-size: 8pt; color: #777; }\n' +
+    '  .unit { font-weight: normal; font-size: 8.5pt; color: #666; }\n' +
+    '  .section-divider td { background: #e8edf3 !important; font-size: 10pt; ' +
+    '    padding: 6px; font-weight: bold; color: #1a3a5c; }\n' +
+    '  .footer { text-align: center; font-size: 8pt; color: #999; margin-top: 16px; ' +
+    '    border-top: 1px solid #ddd; padding-top: 8px; }\n' +
+    '  @media print { body { padding: 0; } .no-print { display: none; } }\n' +
+    '</style>\n</head>\n<body>\n' +
+    '<div class="no-print" style="text-align:center;margin-bottom:10px">\n' +
+    '  <button onclick="window.print()" style="padding:8px 24px;font-size:13pt;cursor:pointer;' +
+    '    background:#1a3a5c;color:#fff;border:none;border-radius:4px">🖨️ 打印 / 导出 PDF</button>\n' +
+    '  <button onclick="window.close()" style="padding:8px 24px;font-size:13pt;cursor:pointer;' +
+    '    margin-left:8px;border:1px solid #ccc;border-radius:4px;background:#fff">关闭</button>\n' +
+    '</div>\n' +
+    '<h1>' + report.title + '</h1>\n' +
+    '<div class="subtitle">' + report.subtitle + '</div>\n' +
+    '<div class="info-bar">' +
+    '  <span><strong>已知条件:</strong> ' + report.inputSummary + '</span>' +
+    '  <span><strong>花键类型:</strong> ' + report.splineType + '</span>' +
+    '  <span>' + dateStr + '</span>' +
+    '</div>\n' +
+    '<table>\n<thead><tr>' +
+    '<th>序号</th><th>项目</th><th>公式 / 代入过程</th><th>结果</th><th>依据</th>' +
+    '</tr></thead>\n<tbody>\n' +
+    stepsHTML +
+    '\n</tbody>\n</table>\n' +
+    '<div class="footer">' +
+    '本计算说明书由渐开线花键参数计算工具自动生成 | 依据 GB/T 3478.1-2008 & GB/T 17855-1999 | ' + dateStr +
+    '</div>\n' +
+    '</body>\n</html>';
+}
+
+// ============================================================
+// 十三、导出
 // ============================================================
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -1910,6 +2463,9 @@ if (typeof module !== 'undefined' && module.exports) {
     calcStressConcentrationFactor,
     calcAllowableStressGB,
     calcCombinedStressGB17855,
-    calcGB17855All
+    calcGB17855All,
+    // 计算报告
+    generateCalcReport,
+    renderCalcReportToHTML
   };
 }

@@ -637,6 +637,69 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   计算报告步骤（中间计算详情）
+   ================================================================ */
+.report-step {
+  background: #fafbfc;
+  border-left: 3px solid var(--primary-light);
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.report-step:nth-child(even) {
+  background: #fff;
+}
+.report-step .report-num {
+  display: inline-block;
+  min-width: 32px;
+  color: var(--primary);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+.report-step .report-formula {
+  display: inline;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+.report-step .report-sub {
+  font-family: var(--font-mono);
+  color: #888;
+  font-size: 0.75rem;
+  padding-left: 32px;
+}
+.report-step .report-result {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding-left: 32px;
+}
+.report-step .report-result strong {
+  color: var(--primary-dark, #1a3a5c);
+}
+.report-step .report-unit {
+  font-weight: normal;
+  font-size: 0.72rem;
+  color: var(--text-light);
+}
+.report-step .report-std {
+  font-size: 0.68rem;
+  color: #999;
+  margin-left: 4px;
+}
+.report-section-divider {
+  background: #e8edf3;
+  padding: 6px 12px;
+  margin: 10px 0 6px 0;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--primary-dark, #1a3a5c);
+  border-radius: 4px;
+}
+
+/* ================================================================
    信息行 & 工具提示
    ================================================================ */
 .info-row {
@@ -1132,6 +1195,15 @@ a:hover { text-decoration: underline; }
     font-size: 0.76rem;
     padding: 8px 10px;
   }
+
+  /* 报告步骤 */
+  .report-step {
+    font-size: 0.74rem;
+    padding: 6px 8px;
+  }
+  .report-step .report-formula { font-size: 0.72rem; }
+  .report-step .report-sub { font-size: 0.7rem; padding-left: 24px; }
+  .report-step .report-result { font-size: 0.76rem; padding-left: 24px; }
 
   /* 图例换行 */
   .map-legend {

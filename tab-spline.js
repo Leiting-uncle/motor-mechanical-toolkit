@@ -298,6 +298,7 @@ function renderSplineResults(r) {
   function fmtRange(hi, lo) {
     return `${hi} / ${lo}`;
   }
+  function toN4(v) { return typeof v === 'number' ? v.toFixed(4) : v; }
 
   let html = '';
 
@@ -314,6 +315,7 @@ function renderSplineResults(r) {
         <tr><td>基圆直径 D<sub>b</sub></td><td>φ${r.basic.基圆直径_Db} mm</td></tr>
         <tr><td>齿距 p</td><td>${r.basic.齿距_p} mm</td></tr>
         <tr><td>基本齿厚/齿槽宽 S / E</td><td>${r.basic.基本齿厚_S} mm</td></tr>
+        <tr><td>齿根圆弧最小曲率半径 R<sub>imin</sub>/R<sub>emin</sub></td><td>${r.basic.齿根圆角最小曲率半径_mm} mm (ρ<sub>f</sub>*×m = ${r.input.rootType.indexOf('圆')>=0?'0.4':'0.2'}×${r.input.m})</td></tr>
         <tr><td>配合</td><td>${fit.配合类别} — ${fit.配合性质}（${fit.配合说明}）</td></tr>
         <tr><td>侧隙范围</td><td>${fit.最小侧隙_mm} ~ ${fit.最大侧隙_mm} mm</td></tr>
         ${fit.最小侧隙_mm <= 0 ? `<tr><td colspan="2"><div class="alert alert-warning">⚠️ 最小侧隙 ≤ 0，该配合可能为过渡/过盈配合</div></td></tr>` : ''}
@@ -392,8 +394,6 @@ function renderSplineResults(r) {
     const gb = r._gb17855;
     const isGB = r._method === 'gb17855' && gb;
     const appF = r._appFactors;
-    // 格式化辅助
-    function toN4(v) { return typeof v === 'number' ? v.toFixed(4) : v; }
 
     function strengthRow(label, symbol, value, unit, sf, threshold, status) {
       return `<tr>
@@ -543,109 +543,82 @@ function renderSplineResults(r) {
     </div>`;
   }
 
-  // ====== Card 6: 中间计算详情 ======
+  // ====== Card 6: 中间计算详情（详细分步推导） ======
+  // 保存到全局变量供导出使用
+  window.__lastCalcResult = r;
+  window.__lastCalcParams = {
+    m: r.input.m, z: r.input.z,
+    toleranceGrade: r.input.toleranceGrade,
+    fitType: r.input.fitType,
+    rootType: r.input.rootType,
+    engagementLength: r.tolerance.配合长度_L_mm
+  };
+
+  var paramsForReport = window.__lastCalcParams;
+  var report = generateCalcReport(paramsForReport, r);
+
+  // 构建报告步骤 HTML
+  var reportStepsHTML = '';
+  for (var si = 0; si < report.steps.length; si++) {
+    var stp = report.steps[si];
+    // 分隔标题行
+    if (!stp.formula && !stp.result && stp.title.indexOf('===') === 0) {
+      reportStepsHTML += '<div class="report-section-divider">' +
+        stp.title.replace(/=/g, '').trim() + '</div>';
+      continue;
+    }
+    var subHtml = stp.substitution ? ('<div class="report-sub">= ' + stp.substitution + '</div>') : '';
+    reportStepsHTML += '<div class="report-step">' +
+      '<span class="report-num">(' + stp.num + ')</span> ' +
+      '<strong>' + stp.title + '</strong>' +
+      (stp.symbol ? ' &nbsp;<em>' + stp.symbol + '</em>' : '') +
+      '<div class="report-formula">' + stp.formula + '</div>' +
+      subHtml +
+      '<div class="report-result">= <strong>' + stp.result +
+        (stp.unit ? ' <span class="report-unit">' + stp.unit + '</span>' : '') + '</strong>' +
+        (stp.standard ? ' <span class="report-std">[' + stp.standard + ']</span>' : '') +
+      '</div></div>';
+  }
+
   html += `
-  <div class="section-card collapsed">
-    <div class="section-header" onclick="this.parentElement.classList.toggle('collapsed')">
-      📝 中间计算详情（供人工验算）
-      <span style="font-size:0.75rem;color:var(--text-light)">▶ 点击展开</span>
+  <div class="section-card">
+    <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px" onclick="var el=this.parentElement;el.classList.toggle('collapsed')">
+      <span>📝 中间计算详情（供人工验算） <span style="font-size:0.75rem;color:var(--text-light)">— 共 ${report.steps.length} 步 ▼</span></span>
+      <button class="btn btn-sm btn-accent" onclick="event.stopPropagation();exportCalcReport()" title="导出为可打印的计算说明书（可保存PDF）" style="font-size:0.75rem;padding:4px 12px">📄 导出计算报告</button>
     </div>
-    <div class="section-body" style="font-size:0.8rem">
-      <div class="formula-block">
-        <span class="formula-label">① 分度圆直径 D = m × z</span>
-        = ${r.input.m} × ${r.input.z} = <strong>${r.basic.分度圆直径_D} mm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">② 基圆直径 D<sub>b</sub> = D × cos30°</span>
-        = ${r.basic.分度圆直径_D} × 0.8660254 = <strong>${r.basic.基圆直径_Db} mm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">③ 齿距 p = πm，基本齿厚 S = p/2</span>
-        p = π × ${r.input.m} = ${r.basic.齿距_p} mm，S = E = <strong>${r.basic.基本齿厚_S} mm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">④ 公差单位</span>
-        i*(D) = 0.45∛D + 0.001D &nbsp;|&nbsp; i**(S) = 0.45∛S + 0.001S<br>
-        总公差 (T+λ) = K₁·i* + K₂·i** = <strong>${tol.总公差_T_lambda_um} μm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑤ 综合公差 λ = 0.6√(Fp² + ff² + Fβ²)</span>
-        = 0.6 × √(${tol.齿距累积公差_Fp_um}² + ${tol.齿形公差_ff_um}² + ${tol.齿向公差_Fbeta_um}²) = <strong>${tol.综合公差_lambda_um} μm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑥ 外花键齿厚 S</span>
-        S<sub>max</sub> = S + es<sub>v</sub>/1000 − λ/1000 = ${r.basic.基本齿厚_S} + ${ext.齿厚.es_v_um}/1000 − ${tol.综合公差_lambda_um}/1000 = <strong>${ext.齿厚.actual_max} mm</strong><br>
-        S<sub>min</sub> = S + es<sub>v</sub>/1000 − (T+λ)/1000 = <strong>${ext.齿厚.actual_min} mm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑦ 内花键齿槽宽 E（基孔制 H，EI=0）</span>
-        E<sub>min</sub> = E + λ/1000 = ${r.basic.基本齿厚_S} + ${tol.综合公差_lambda_um}/1000 = <strong>${int.齿槽宽.actual_min} mm</strong><br>
-        E<sub>max</sub> = E + (T+λ)/1000 = <strong>${int.齿槽宽.actual_max} mm</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑧ 外花键跨棒距 M<sub>Re</sub></span>
-        inv(α<sub>e</sub>) = S/D + inv30° + D<sub>R</sub>/D<sub>b</sub> − π/z<br>
-        α<sub>e</sub> 由牛顿迭代求解 → M<sub>Re</sub> = D<sub>b</sub>/cos(α<sub>e</sub>) + D<sub>R</sub> (偶齿) 或 + D<sub>R</sub> × cos(90°/z) 修正 (奇齿)
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑨ 内花键棒间距 M<sub>Ri</sub></span>
-        inv(α<sub>i</sub>) = E/D + inv30° − D<sub>R</sub>/D<sub>b</sub><br>
-        α<sub>i</sub> 由牛顿迭代求解 → M<sub>Ri</sub> = D<sub>b</sub>/cos(α<sub>i</sub>) − D<sub>R</sub> (偶齿) 或 − D<sub>R</sub> × cos(90°/z) 修正 (奇齿)
-      </div>
-      ${r.strength ? `
-      <div class="formula-block">
-        <span class="formula-label">⑩ 齿面接触强度（《机械设计手册》第五版）</span>
-        σ<sub>H</sub> = 2000T / (ψ·z·h<sub>c</sub>·l·D<sub>m</sub>) = <strong>${r.strength.contact.stress_MPa} MPa</strong>
-        &nbsp;|&nbsp; 许用 [σ<sub>H</sub>] = ${r.strength.contact.allowable_MPa} MPa
-        &nbsp;|&nbsp; n<sub>H</sub> = ${r.strength.contact.safetyFactor}
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑪ 齿根弯曲强度（《机械设计手册》第五版）</span>
-        σ<sub>F</sub> = 6000T·h / (ψ·z·S<sub>fn</sub>²·l·D<sub>m</sub>) = <strong>${r.strength.bending.stress_MPa} MPa</strong>
-        &nbsp;|&nbsp; 许用 [σ<sub>F</sub>] = ${r.strength.bending.allowable_MPa} MPa
-        &nbsp;|&nbsp; n<sub>F</sub> = ${r.strength.bending.safetyFactor}
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑫ 齿根抗剪强度（《机械设计手册》第五版）</span>
-        τ = 2000T / (ψ·z·S<sub>fn</sub>·l·D<sub>m</sub>) = <strong>${r.strength.shear.stress_MPa} MPa</strong>
-        &nbsp;|&nbsp; 许用 [τ] = ${r.strength.shear.allowable_MPa} MPa
-        &nbsp;|&nbsp; n<sub>τ</sub> = ${r.strength.shear.safetyFactor}
-      </div>
-      ${r.strength.wear10e8 ? `
-      <div class="formula-block">
-        <span class="formula-label">⑬ 10⁸循环磨损校核（p·v 值法）</span>
-        v<sub>s</sub> = π·h<sub>c</sub>·n / 60000 = <strong>${r.strength.wear10e8.v_s_ms} m/s</strong><br>
-        p·v = σ<sub>H</sub> × v<sub>s</sub> = <strong>${r.strength.wear10e8.pv_MPa_ms} MPa·m/s</strong>
-        &nbsp;|&nbsp; 许用 [p·v] = ${r.strength.wear10e8.allowable_MPa_ms} MPa·m/s
-        &nbsp;|&nbsp; n<sub>pv</sub> = ${r.strength.wear10e8.safetyFactor}
-      </div>` : ''}
-      <div class="formula-block">
-        <span class="formula-label">⑭ 长期工作无磨损校核</span>
-        σ<sub>H</sub> = ${r.strength.wearFree.sigma_H_MPa} MPa
-        ${r.strength.wearFree.isWearFree ? '≤' : '>'}
-        [σ<sub>Hw</sub>] = ${r.strength.wearFree.allowable_MPa} MPa
-        &nbsp;|&nbsp; 裕度 m = ${r.strength.wearFree.margin}
-        &nbsp;→&nbsp; <strong>${r.strength.wearFree.isWearFree ? '长期无磨损' : '可能发生微动磨损'}</strong>
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑮ 外花键轴扭转强度（《机械设计手册》第五版）</span>
-        τ<sub>max</sub> = 16000T / (π·D<sub>ie_min</sub>³) = <strong>${r.strength.shaftTorsion.stress_MPa} MPa</strong>
-        &nbsp;|&nbsp; W<sub>t</sub> = ${r.strength.shaftTorsion.W_t_mm3} mm³
-        &nbsp;|&nbsp; d = ${r.strength.shaftTorsion.D_ie_min} mm
-        &nbsp;|&nbsp; n<sub>τ</sub> = ${r.strength.shaftTorsion.safetyFactor}
-      </div>
-      <div class="formula-block">
-        <span class="formula-label">⑯ 外花键轴弯曲强度（《机械设计手册》第五版）</span>
-        ${r.strength.shaftBending.sigma_e_MPa > 0
-          ? `σ<sub>e</sub> = √(σ<sub>b</sub>² + 3τ²) = <strong>${r.strength.shaftBending.sigma_e_MPa} MPa</strong>
-          &nbsp;|&nbsp; W<sub>b</sub> = ${r.strength.shaftBending.W_b_mm3} mm³
-          &nbsp;|&nbsp; M = ${r.strength.shaftBending.bendingMoment_Nm} N·m`
-          : `未提供弯矩值，跳过弯扭合成校核。W<sub>b</sub> = ${r.strength.shaftBending.W_b_mm3} mm³（供参考）`}
-      </div>` : ''}
+    <div class="section-body" style="font-size:0.8rem;max-height:70vh;overflow-y:auto">
+      ${reportStepsHTML}
     </div>
   </div>`;
 
   container.innerHTML = html;
+}
+
+// ---- 导出计算报告 ----
+function exportCalcReport() {
+  var r = window.__lastCalcResult;
+  var params = window.__lastCalcParams;
+  if (!r || !params) {
+    alert('请先完成计算，再导出报告。');
+    return;
+  }
+
+  var report = generateCalcReport(params, r);
+  var fullHTML = renderCalcReportToHTML(report);
+
+  // 在新窗口中打开并触发打印
+  var w = window.open('', '_blank', 'width=900,height=700');
+  if (!w) {
+    alert('弹窗被拦截，请允许本站弹窗后重试。');
+    return;
+  }
+  w.document.write(fullHTML);
+  w.document.close();
+  // 延迟打印，确保样式加载完成
+  setTimeout(function() {
+    w.focus();
+    w.print();
+  }, 500);
 }
 
 // ---- 重置 ----
