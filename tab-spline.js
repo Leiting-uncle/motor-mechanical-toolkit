@@ -54,12 +54,11 @@ function loadSplineExample(type) {
     document.getElementById('input-moment').value = '0';
 
     // 填充自定义材料：优质合金钢 σ_0.2≥835, σ_b≥980, HB 293-341
-    var csC = document.getElementById('cs-compression'); if (csC) csC.value = '200';
-    var csS = document.getElementById('cs-shear'); if (csS) csS.value = '120';
-    var csB = document.getElementById('cs-bending'); if (csB) csB.value = '250';
-    var csPV = document.getElementById('cs-wearPV'); if (csPV) csPV.value = '8';
-    var csWF = document.getElementById('cs-wearFree'); if (csWF) csWF.value = '100';
-    var csH = document.getElementById('cs-hardness'); if (csH) csH.value = '优质合金钢 HB293-341';
+    var csY = document.getElementById('cs-yield'); if (csY) csY.value = '835';
+    var csT = document.getElementById('cs-tensile'); if (csT) csT.value = '980';
+    var csHT = document.getElementById('cs-hardType'); if (csHT) csHT.value = 'HB';
+    var csHV = document.getElementById('cs-hardVal'); if (csHV) csHV.value = '293';
+    var csHL = document.getElementById('cs-hardness'); if (csHL) csHL.value = '优质合金钢 HB293-341';
 
     // 设置计算方法为 GB/T 17855-1999
     var methodSel = document.getElementById('input-method');
@@ -152,16 +151,25 @@ function calcSpline() {
   if (!m || m <= 0) { alert('请选择有效的模数 m'); return; }
   if (!z || z < 6 || z > 120) { alert('齿数 z 应在 6~120 之间'); return; }
 
-  // 处理自定义材料
+  // 处理自定义材料 — 用户输入 σ_b/σ_0.2/硬度，自动计算各项许用应力
   let customMaterial = null;
   if (material === 'custom') {
+    var csYield = readCustomVal('cs-yield') || 835;    // σ_0.2 (MPa)
+    var csTensile = readCustomVal('cs-tensile') || 980; // σ_b (MPa)
+    var csHardVal = parseFloat(document.getElementById('cs-hardVal')?.value) || 293;
+    var csHardType = document.getElementById('cs-hardType')?.value || 'HB';
+    var csHardLabel = (csHardType === 'HB')
+      ? ('HB' + csHardVal)
+      : ('HRC' + csHardVal);
+
+    // 由强度自动推算许用值（安全系数内置）
     customMaterial = {
-      allowableCompression: readCustomVal('cs-compression'),
-      allowableShear: readCustomVal('cs-shear'),
-      allowableBending: readCustomVal('cs-bending'),
-      allowableWearPV: readCustomVal('cs-wearPV'),
-      allowableWearFreeContact: readCustomVal('cs-wearFree'),
-      hardness: document.getElementById('cs-hardness').value || '自定义'
+      allowableCompression: Math.round(csYield / 1.2),       // [σ_H] ≈ σ_0.2 / 1.2
+      allowableShear: Math.round(csYield * 0.58),             // [τ] ≈ 0.58 × σ_0.2
+      allowableBending: Math.round(csTensile / 1.5),          // [σ_F] ≈ σ_b / 1.5
+      allowableWearPV: Math.round(csYield * 0.012 * 10) / 10, // [p·v] ≈ 0.012 × σ_0.2
+      allowableWearFreeContact: Math.round(csHardVal * (csHardType === 'HRC' ? 0.3 : 0.032)), // 表5
+      hardness: csHardLabel
     };
   }
 
@@ -198,17 +206,18 @@ function calcSpline() {
       var gb_h_w = m;
       // 全齿高 h = (D_ee - D_ie) / 2
       var gb_h = (gb_D_ee - gb_D_ie) / 2;
-      // 齿根圆角半径 ρ
-      var profile = (root === 'filletRoot') ? 0.3 : 0.2;
-      var gb_rho = profile * m;
+      // 齿根圆角半径 ρ — 从 BASIC_PROFILE_30 读取标准值
+      var profileData = BASIC_PROFILE_30[root] || BASIC_PROFILE_30['filletRoot'];
+      var gb_rho = profileData.rootFilletCoeff * m;
 
       // 材料强度参数
       var gb_sigma02, gb_sigmaB, gb_HB;
       if (material === 'custom') {
-        // 自定义材料：从现有自定义参数推算强度
-        gb_sigma02 = Math.max(readCustomVal('cs-compression') || 200, 200) * 2.8;
-        gb_sigmaB = Math.max(gb_sigma02 * 1.17, 980);
-        gb_HB = 293; // 默认值
+        // 自定义材料：直接从输入框读取 σ_b 和 σ_0.2
+        gb_sigma02 = readCustomVal('cs-yield') || 835;
+        gb_sigmaB = readCustomVal('cs-tensile') || 980;
+        var csHardLabel = document.getElementById('cs-hardness');
+        gb_HB = parseFloat(document.getElementById('cs-hardVal')?.value) || 293;
       } else {
         // 预设材料：从 MATERIAL_PROPERTIES 反推近似值
         var matAllowComp = result.strength ? result.strength.contact.allowable_MPa : 140;
@@ -324,7 +333,8 @@ function renderSplineResults(r) {
         <tr><td>大径 D<sub>ee</sub></td><td>${fmtDia(ext.大径_D_ee.basic, ext.大径_D_ee.标注)}</td></tr>
         <tr><td>小径 D<sub>ie</sub></td><td>${fmtDia(ext.小径_D_ie.basic, ext.小径_D_ie.标注)}</td></tr>
         <tr><td>渐开线起始圆 D<sub>Fe max</sub></td><td>φ${ext.渐开线起始圆_D_Fe_max} mm</td></tr>
-        <tr><td>齿厚 S</td><td>${fmtRange(ext.齿厚.actual_max, ext.齿厚.actual_min)} (es<sub>v</sub>=${ext.齿厚.es_v_um}μm, T=${ext.齿厚.tolerance_T}mm)</td></tr>
+        <tr><td>齿厚 S<sub>实际</sub></td><td>${fmtRange(ext.齿厚.actual_max, ext.齿厚.actual_min)} (es<sub>v</sub>=${ext.齿厚.es_v_um}μm, T=${ext.齿厚.tolerance_T}mm)</td></tr>
+        <tr style="background:#f8f4e8"><td>齿厚 S<sub>作用</sub></td><td>${fmtRange(ext.齿厚.action_max, ext.齿厚.action_min)} <span style="font-size:0.72rem;color:var(--text-light)">— 用于配合判定</span></td></tr>
         <tr><td>跨棒距 M<sub>Re</sub></td>
           <td>D<sub>R</sub>=${ext.跨棒距_M_Re.pinDiameter} → ${ext.跨棒距_M_Re.max} / ${ext.跨棒距_M_Re.min}</td></tr>
         ${ext.跨棒距_M_Re.max_detail.error ? `<tr><td colspan="2"><div class="alert alert-warning">⚠️ ${ext.跨棒距_M_Re.max_detail.message}</div></td></tr>` : ''}
@@ -344,7 +354,8 @@ function renderSplineResults(r) {
         <tr><td>大径 D<sub>ei</sub></td><td>${fmtDia(int.大径_D_ei.basic, int.大径_D_ei.标注)}</td></tr>
         <tr><td>小径 D<sub>ii</sub></td><td>${fmtDia(int.小径_D_ii.basic, int.小径_D_ii.标注)}</td></tr>
         <tr><td>渐开线终止圆 D<sub>Fi min</sub></td><td>φ${int.渐开线终止圆_D_Fi_min} mm</td></tr>
-        <tr><td>齿槽宽 E</td><td>${fmtRange(int.齿槽宽.actual_max, int.齿槽宽.actual_min)} (EI=0, T=${int.齿槽宽.tolerance_T}mm)</td></tr>
+        <tr><td>齿槽宽 E<sub>实际</sub></td><td>${fmtRange(int.齿槽宽.actual_max, int.齿槽宽.actual_min)} (EI=0, T=${int.齿槽宽.tolerance_T}mm)</td></tr>
+        <tr style="background:#f8f4e8"><td>齿槽宽 E<sub>作用</sub></td><td>${fmtRange(int.齿槽宽.action_max, int.齿槽宽.action_min)} <span style="font-size:0.72rem;color:var(--text-light)">— 用于配合判定 (EI<sub>v</sub>=0)</span></td></tr>
         <tr><td>棒间距 M<sub>Ri</sub></td>
           <td>D<sub>R</sub>=${int.棒间距_M_Ri.pinDiameter} → ${int.棒间距_M_Ri.min} / ${int.棒间距_M_Ri.max}</td></tr>
         ${int.棒间距_M_Ri.min_detail.error ? `<tr><td colspan="2"><div class="alert alert-warning">⚠️ ${int.棒间距_M_Ri.min_detail.message}</div></td></tr>` : ''}
@@ -655,10 +666,11 @@ function resetSpline() {
   // 隐藏自定义材料面板并清空
   var csPanel = document.getElementById('custom-spline');
   if (csPanel) csPanel.style.display = 'none';
-  ['cs-compression','cs-shear','cs-bending','cs-wearPV','cs-wearFree'].forEach(function(id) {
+  ['cs-yield','cs-tensile','cs-hardVal'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   var csHard = document.getElementById('cs-hardness'); if (csHard) csHard.value = '';
+  var csHT = document.getElementById('cs-hardType'); if (csHT) csHT.value = 'HB';
   document.getElementById('results-spline').innerHTML = `
     <div class="empty-state" id="empty-state-spline">
       <div class="icon">📋</div>

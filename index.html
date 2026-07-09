@@ -187,36 +187,38 @@
               </select>
               <!-- 自定义花键材料 -->
               <div class="custom-material-panel" id="custom-spline">
-                <div class="custom-title">✏️ 自定义材料属性</div>
+                <div class="custom-title">✏️ 自定义材料强度</div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">[σ<sub>H</sub>] 许用挤压 <span class="unit">(MPa)</span></label>
-                    <input type="number" id="cs-compression" class="form-input" placeholder="140" min="1" step="1">
+                    <label class="form-label">σ<sub>0.2</sub> 屈服强度 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-yield" class="form-input" placeholder="835" min="100" step="5">
                   </div>
                   <div class="form-group">
-                    <label class="form-label">[τ] 许用剪切 <span class="unit">(MPa)</span></label>
-                    <input type="number" id="cs-shear" class="form-input" placeholder="85" min="1" step="1">
+                    <label class="form-label">σ<sub>b</sub> 抗拉强度 <span class="unit">(MPa)</span></label>
+                    <input type="number" id="cs-tensile" class="form-input" placeholder="980" min="100" step="5">
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">[σ<sub>F</sub>] 许用弯曲 <span class="unit">(MPa)</span></label>
-                    <input type="number" id="cs-bending" class="form-input" placeholder="170" min="1" step="1">
+                    <label class="form-label">硬度类型</label>
+                    <select id="cs-hardType" class="form-select" style="font-size:0.82rem">
+                      <option value="HB" selected>布氏硬度 HB</option>
+                      <option value="HRC">洛氏硬度 HRC</option>
+                    </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label">[p·v] 许用磨损 <span class="unit">(MPa·m/s)</span></label>
-                    <input type="number" id="cs-wearPV" class="form-input" placeholder="3.5" min="0.1" step="0.1">
+                    <label class="form-label">硬度值</label>
+                    <input type="number" id="cs-hardVal" class="form-input" placeholder="293" min="1" step="1">
                   </div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label">[σ<sub>Hw</sub>] 无磨损 <span class="unit">(MPa)</span></label>
-                    <input type="number" id="cs-wearFree" class="form-input" placeholder="60" min="1" step="1">
+                  <div class="form-group" style="grid-column:1/-1">
+                    <label class="form-label">材料备注</label>
+                    <input type="text" id="cs-hardness" class="form-input" placeholder="例：优质合金钢 HB293-341">
                   </div>
-                  <div class="form-group">
-                    <label class="form-label">硬度/备注</label>
-                    <input type="text" id="cs-hardness" class="form-input" placeholder="自定义">
-                  </div>
+                </div>
+                <div style="font-size:0.7rem;color:var(--text-light);margin-top:4px">
+                  💡 许用应力由强度自动计算：[σ<sub>H</sub>]≈σ<sub>0.2</sub>/1.2, [τ]≈0.58×σ<sub>0.2</sub>, [σ<sub>F</sub>]≈σ<sub>b</sub>/1.5, [σ<sub>Hw</sub>]由硬度按表5推算
                 </div>
               </div>
             </div>
